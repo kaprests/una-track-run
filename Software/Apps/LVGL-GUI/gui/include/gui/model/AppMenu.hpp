@@ -108,8 +108,8 @@ struct Root {
 
     struct Settings {
         enum Id {
-            ID_PHONE_NOTIF = 0,
-            ID_COUNT, ID_DEFAULT = ID_PHONE_NOTIF
+            ID_LAP_LENGTH = 0, ID_LANE, ID_LANE_WIDTH, ID_PHONE_NOTIF,
+            ID_COUNT, ID_DEFAULT = ID_LAP_LENGTH
         };
     };
 };

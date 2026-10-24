@@ -21,6 +21,7 @@
 #include "gui/screens/MenuIntervalsMetricScreen.hpp"
 #include "gui/screens/IntervalsPickerScreen.hpp"
 #include "gui/screens/MenuSettingsScreen.hpp"
+#include "gui/screens/MenuSettingValueScreen.hpp"
 #include "gui/screens/TrackStartConfirmScreen.hpp"
 #include "gui/screens/TrackIntervalsCountdownScreen.hpp"
 #include "gui/screens/TrackScreen.hpp"
@@ -114,6 +115,7 @@ Screen* ScreenManager::create(ScreenId id)
     Model& m = *mModel;
     using Phase  = MenuIntervalsMetricScreen::Phase;
     using Metric = IntervalsPickerScreen::Metric;
+    using Setting = MenuSettingValueScreen::Kind;
 
     switch (id) {
         case ScreenId::Main:                      return new MainScreen(m);
@@ -128,6 +130,9 @@ Screen* ScreenManager::create(ScreenId id)
         case ScreenId::MenuIntervalsRestDistance: return new IntervalsPickerScreen(m, Phase::Rest, Metric::Distance);
 
         case ScreenId::MenuSettings:              return new MenuSettingsScreen(m);
+        case ScreenId::MenuLapLength:             return new MenuSettingValueScreen(m, Setting::LapLength);
+        case ScreenId::MenuLane:                  return new MenuSettingValueScreen(m, Setting::Lane);
+        case ScreenId::MenuLaneWidth:             return new MenuSettingValueScreen(m, Setting::LaneWidth);
 
         case ScreenId::TrackStartConfirm:         return new TrackStartConfirmScreen(m);
         case ScreenId::TrackIntervalsCountdown:   return new TrackIntervalsCountdownScreen(m);
