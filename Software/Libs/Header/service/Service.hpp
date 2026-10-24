@@ -2,6 +2,7 @@
 #define SERVICE_HPP
 
 #include <ctime>
+#include <optional>
 
 #include "SDK/Kernel/Kernel.hpp"
 #include "SDK/SensorLayer/SensorConnection.hpp"
@@ -14,6 +15,9 @@
 #include "SDK/Calibration/CadenceStrideModel.hpp"
 #include "SDK/Calibration/TreadmillSpeedEstimator.hpp"
 
+#include "CalibrationStore.hpp"
+#include "SegmentCorrector.hpp"
+#include "TrackDistance.hpp"
 #include "SettingsSerializer.hpp"
 #include "ActivitySummarySerializer.hpp"
 #include "ActivityWriter.hpp"
@@ -85,6 +89,13 @@ private:
     SDK::Calibration::TreadmillSpeedEstimator mEstimator;
     float                                     mHeightM     = 1.70f;
     std::time_t                               mLastTickUtc = 0;
+
+    // Known-distance segments (track laps, interval reps) correct the model's distance.
+    CalibrationStore  mCalibrationStore;
+    SegmentCorrector  mCorrector;
+    TrackDistance     mDistance;
+    std::time_t       mSegmentStartActiveSec = 0;
+    bool              mAnchoredThisSession   = false;
 
     // -- GPS speed (outdoor mode) ---------------------------------------------
 
@@ -191,7 +202,9 @@ private:
     void sendInitialInfoToGui();
     void startTrack(std::time_t utc);
     void processTrack();
-    void saveLap();
+    void saveLap(std::optional<float> exactDistanceM = std::nullopt);
+    /// Ends a known-length segment (or an unmeasured one without a length). True if the length corrected the pace.
+    bool endSegment(std::optional<float> knownM);
     void stopTrack(bool discard);
     void pauseTrack(bool pause);
     void buildPartialSummary();

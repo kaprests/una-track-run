@@ -72,6 +72,7 @@ Service::Service(SDK::Kernel &kernel)
         , mSensorRunningCadence(SDK::Sensor::Type::RUNNING_CADENCE, skSamplePeriod, skSampleLatency)
         , mModel(mKernel.fs)
         , mEstimator(mModel)
+        , mCalibrationStore(mKernel, "track_calib.json")
         , mTimeTracker(kernel.sys)
         , mBatterySoc(kernel.sys)
         , mBatteryVoltage(kernel.sys)
@@ -498,9 +499,37 @@ void Service::handleEvent(const CustomMessage::TrackResume& /*event*/)
 
 void Service::handleEvent(const CustomMessage::ManualLap& /*event*/)
 {
-    saveLap();
+    if (usesGps()) {
+        saveLap();
+    } else {
+        const float lapM     = mSettings.laneLapLengthM();
+        const bool  anchored = endSegment(lapM);
+        if (anchored) {
+            mTrackData.lapDistance = lapM;
+            mTrackData.avgLapSpeed = speedFromTotals(lapM, static_cast<float>(mTrackData.lapTime));
+            mTrackData.lapPace     = getPace(mTrackData.avgLapSpeed, mSpeedCounter.getMinValid());
+            SDK::send_msg<CustomMessage::TrackDataUpd>(mKernel, mTrackData);
+        }
+        saveLap(anchored ? std::optional<float>(lapM) : std::nullopt);
+    }
     SDK::send_msg<CustomMessage::LapEnded>(mKernel, mTrackData.lapNum);
     notifyLapEnd();
+}
+
+bool Service::endSegment(std::optional<float> knownM)
+{
+    const float        rawTotalM = mEstimator.distanceM();
+    const std::time_t  activeSec = mTimeCounter.getValueActive();
+
+    const bool anchored = knownM &&
+        mCorrector.anchor(mDistance.rawSegmentM(rawTotalM), *knownM,
+                          static_cast<float>(activeSec - mSegmentStartActiveSec));
+
+    mDistance.closeSegment(rawTotalM, mCorrector.k(), anchored ? knownM : std::nullopt);
+    mDistanceCounter.add(mDistance.total(rawTotalM, mCorrector.k()));
+    mSegmentStartActiveSec = activeSec;
+    mAnchoredThisSession  |= anchored;
+    return anchored;
 }
 
 void Service::setCapabilities()
@@ -760,6 +789,12 @@ void Service::startTrack(std::time_t utc)
     mEstimator.startSession();
     mLastTickUtc = 0;
 
+    mCalibrationStore.load();
+    mCorrector             = SegmentCorrector(mCalibrationStore.prior(mSettings.lapLengthM, mSettings.lane));
+    mDistance.reset();
+    mSegmentStartActiveSec = 0;
+    mAnchoredThisSession   = false;
+
     mSessionNotEmpty = false;
     mLapNotEmpty = false;
 
@@ -821,8 +856,9 @@ void Service::processTrack()
         mLastTickUtc = nowUtc;
 
         mEstimator.tick(mRunningCadence.cadenceSpm, mRunningCadence.cadenceValid, dt);
-        mDistanceCounter.add(mEstimator.distanceM());
-        mSpeedCounter.add(mEstimator.speedMps());
+        mCorrector.drift(dt);
+        mDistanceCounter.add(mDistance.total(mEstimator.distanceM(), mCorrector.k()));
+        mSpeedCounter.add(mCorrector.k() * mEstimator.speedMps());
     }
 
     // Time, s
@@ -897,10 +933,10 @@ void Service::processTrack()
     }
 }
 
-void Service::saveLap()
+void Service::saveLap(std::optional<float> exactDistanceM)
 {
     const auto  lapTime     = mTimeCounter.getLapValueActive();
-    const float lapDistance = mDistanceCounter.getLapValueActive();
+    const float lapDistance = exactDistanceM.value_or(mDistanceCounter.getLapValueActive());
     const float lapSpeed    = speedFromTotals(lapDistance, static_cast<float>(lapTime));
 
     // Accumulate lap into summary
@@ -1046,6 +1082,13 @@ void Service::stopTrack(bool discard)
     LOG_INFO("Heart rate: %.0f / %.0f bpm\n", mHrCounter.getAverage(), mHrCounter.getMaximum());
 
     SDK::send_msg<CustomMessage::TrackStateUpd>(mKernel, mTrackState);
+
+    if (!discard && mAnchoredThisSession) {
+        mCalibrationStore.remember(mSettings.lapLengthM, mSettings.lane, mCorrector.state());
+        if (!mCalibrationStore.save()) {
+            LOG_ERROR("Can't save track calibration\n");
+        }
+    }
 
     disconnect();
 }
