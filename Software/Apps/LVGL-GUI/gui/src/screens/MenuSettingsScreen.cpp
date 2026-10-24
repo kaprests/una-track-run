@@ -50,13 +50,13 @@ MenuSettingsScreen::MenuSettingsScreen(Model& model)
 void MenuSettingsScreen::build()
 {
     const auto font = &poppins_semibold_25;
-    mItems[Menu::ID_LAP_LENGTH]   = { Style::Tip,    "Lap\nLength",     "Lap Length",     font, mTips[Menu::ID_LAP_LENGTH] };
+    mItems[Menu::ID_LAP_LENGTH]   = { Style::Tip,    "Lap Length",      nullptr,          font, mTips[Menu::ID_LAP_LENGTH] };
     mItems[Menu::ID_LANE]         = { Style::Tip,    "Lane",            nullptr,          font, mTips[Menu::ID_LANE] };
-    mItems[Menu::ID_LANE_WIDTH]   = { Style::Tip,    "Lane\nWidth",     "Lane Width",     font, mTips[Menu::ID_LANE_WIDTH] };
+    mItems[Menu::ID_LANE_WIDTH]   = { Style::Tip,    "Lane Width",      nullptr,          font, mTips[Menu::ID_LANE_WIDTH] };
     mItems[Menu::ID_LAP_REMINDER] = { Style::Toggle, "Lap\nReminder",   "Lap Reminder",   font };
-    mItems[Menu::ID_MISSED_LAP]   = { Style::Tip,    "Missed\nLap",     "Missed Lap",     font, mTips[Menu::ID_MISSED_LAP] };
+    mItems[Menu::ID_MISSED_LAP]   = { Style::Tip,    "Missed Lap",      nullptr,          font, mTips[Menu::ID_MISSED_LAP] };
     mItems[Menu::ID_EARLY_GUARD]  = { Style::Toggle, "Press\nGuard",    "Press Guard",    font };
-    mItems[Menu::ID_EARLY_MIN]    = { Style::Tip,    "Guard\nLevel",    "Guard Level",    font, mTips[Menu::ID_EARLY_MIN] };
+    mItems[Menu::ID_EARLY_MIN]    = { Style::Tip,    "Guard Level",     nullptr,          font, mTips[Menu::ID_EARLY_MIN] };
     mItems[Menu::ID_PHONE_NOTIF]  = { Style::Toggle, "Phone\nNotif.",   "Phone Notif.",   font };
 
     mMenu      = std::make_unique<WheelMenu>(mRoot, mItems, Menu::ID_COUNT);
