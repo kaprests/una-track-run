@@ -5,12 +5,13 @@
 
 namespace {
 
-constexpr float kLapM = 200.0f;
+constexpr float kLapM    = 200.0f;
+constexpr float kRelease = 0.2f;
 
 TrackDistance trackWithLaps()
 {
-    TrackDistance distance;
-    distance.beginSegment(TrackDistance::Segment{ kLapM, true });
+    TrackDistance distance{ kRelease };
+    distance.beginSegment(TrackDistance::Segment{ kLapM, TrackDistance::Segment::Kind::Lap });
     return distance;
 }
 
@@ -32,7 +33,7 @@ TEST(TrackDistance, PressSnapsToTheMarkFromBelow)
 {
     TrackDistance distance = trackWithLaps();
     EXPECT_EQ(distance.closeSegment(190.0f, 1.0f), std::optional<float>(200.0f));
-    distance.beginSegment(TrackDistance::Segment{ kLapM, true });
+    distance.beginSegment(TrackDistance::Segment{ kLapM, TrackDistance::Segment::Kind::Lap });
     EXPECT_FLOAT_EQ(distance.total(190.0f, 1.0f), 200.0f);
 }
 
@@ -40,7 +41,7 @@ TEST(TrackDistance, PressSnapsToTheMarkFromAbove)
 {
     TrackDistance distance = trackWithLaps();
     EXPECT_EQ(distance.closeSegment(215.0f, 1.0f), std::optional<float>(200.0f));
-    distance.beginSegment(TrackDistance::Segment{ kLapM, true });
+    distance.beginSegment(TrackDistance::Segment{ kLapM, TrackDistance::Segment::Kind::Lap });
     EXPECT_FLOAT_EQ(distance.total(215.0f, 1.0f), 200.0f);
     EXPECT_FLOAT_EQ(distance.total(265.0f, 1.0f), 250.0f);
 }
@@ -67,7 +68,7 @@ TEST(TrackDistance, TenLapsLandExactlyOnTheMarks)
     for (int lap = 1; lap <= 10; ++lap) {
         raw += (lap % 2 == 0) ? 192.0f : 207.0f;
         distance.closeSegment(raw, 1.0f);
-        distance.beginSegment(TrackDistance::Segment{ kLapM, true });
+        distance.beginSegment(TrackDistance::Segment{ kLapM, TrackDistance::Segment::Kind::Lap });
         EXPECT_FLOAT_EQ(distance.total(raw, 1.0f), static_cast<float>(lap) * kLapM);
     }
 }
@@ -84,20 +85,20 @@ TEST(TrackDistance, NeverDecreases)
         previous = shown;
         if (step % 50 == 49) {
             distance.closeSegment(raw, 1.0f);
-            distance.beginSegment(TrackDistance::Segment{ kLapM, true });
+            distance.beginSegment(TrackDistance::Segment{ kLapM, TrackDistance::Segment::Kind::Lap });
         }
     }
 }
 
 TEST(TrackDistance, ScalesModelDistanceByK)
 {
-    TrackDistance distance;
+    TrackDistance distance{ kRelease };
     EXPECT_FLOAT_EQ(distance.total(100.0f, 1.1f), 110.0f);
 }
 
 TEST(TrackDistance, SegmentWithoutLengthIsNotCappedAndNotAnchored)
 {
-    TrackDistance distance;
+    TrackDistance distance{ kRelease };
     EXPECT_FLOAT_EQ(distance.total(500.0f, 1.0f), 500.0f);
     EXPECT_EQ(distance.closeSegment(500.0f, 1.1f), std::nullopt);
     EXPECT_FLOAT_EQ(distance.total(600.0f, 1.1f), 550.0f + 110.0f);
@@ -105,8 +106,8 @@ TEST(TrackDistance, SegmentWithoutLengthIsNotCappedAndNotAnchored)
 
 TEST(TrackDistance, RepEndsOnOnePressAndReleasesWhenForgotten)
 {
-    TrackDistance distance;
-    distance.beginSegment(TrackDistance::Segment{ 300.0f, false });
+    TrackDistance distance{ kRelease };
+    distance.beginSegment(TrackDistance::Segment{ 300.0f, TrackDistance::Segment::Kind::Rep });
     EXPECT_FLOAT_EQ(distance.total(320.0f, 1.0f), 300.0f);
     EXPECT_FLOAT_EQ(distance.total(361.0f, 1.0f), 361.0f);
     EXPECT_FLOAT_EQ(distance.total(700.0f, 1.0f), 700.0f);
@@ -129,8 +130,15 @@ TEST(TrackDistance, EarlyPressIsJudgedWithinTheCurrentLapAfterAForgottenPress)
 
 TEST(TrackDistance, SegmentWithoutLengthHasNoEarlyPress)
 {
-    const TrackDistance distance;
+    const TrackDistance distance{ kRelease };
     EXPECT_FALSE(distance.isEarlyPress(5.0f, 1.0f, 0.5f));
+}
+
+TEST(TrackDistance, ReportsDistanceLeftToTheMark)
+{
+    const TrackDistance distance = trackWithLaps();
+    EXPECT_EQ(distance.toMarkM(185.0f, 1.0f), std::optional<float>(15.0f));
+    EXPECT_EQ(TrackDistance{ kRelease }.toMarkM(185.0f, 1.0f), std::nullopt);
 }
 
 TEST(TrackDistance, ReportsModelDistanceOfCurrentSegment)
@@ -151,7 +159,7 @@ TEST(TrackDistance, SessionTotalEqualsSumOfLapsInTheCounter)
     float lapsSum = 0.0f;
     const auto press = [&] {
         distance.closeSegment(raw, 1.0f);
-        distance.beginSegment(TrackDistance::Segment{ kLapM, true });
+        distance.beginSegment(TrackDistance::Segment{ kLapM, TrackDistance::Segment::Kind::Lap });
         counter.add(distance.total(raw, 1.0f));
         lapsSum += counter.getLapValueActive();
         counter.resetLap();

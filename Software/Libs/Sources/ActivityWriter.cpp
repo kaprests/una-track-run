@@ -147,7 +147,7 @@ void ActivityWriter::defineRecordMessages()
         {DF_HR_SOURCE, 1, 0}, {DF_HR_OPTICAL, 1, 0}, {DF_HR_EXTERNAL, 1, 0},
     };
 
-    // Plain record (HR/cadence only) + the developer fields.
+    // Plain record.
     mFit->defineMessage(L_RECORD, fit::mesgNum(fit::MesgNum::Record),
         {fit::field::Record::Timestamp,
          kRecordCommonTail[0], kRecordCommonTail[1], kRecordCommonTail[2],

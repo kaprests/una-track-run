@@ -13,7 +13,7 @@
 
 namespace
 {
-using Lap = Settings::Lap;
+using L = Settings::Limits;
 
 struct Range {
     const char* title;
@@ -31,24 +31,24 @@ constexpr uint16_t countOf(float first, float last, float step)
 }
 
 constexpr Range kRanges[] = {
-    { "LAP LENGTH", "%.0f m", Lap::kLengthMinM, Lap::kLengthStepM,
-      countOf(Lap::kLengthMinM, Lap::kLengthMaxM, Lap::kLengthStepM),
+    { "LAP LENGTH", "%.0f m", L::kLapLengthMinM, L::kLapLengthStepM,
+      countOf(L::kLapLengthMinM, L::kLapLengthMaxM, L::kLapLengthStepM),
       [](const Settings& s) { return s.lapLengthM; },
       [](Settings& s, float v) { s.lapLengthM = v; } },
-    { "LANE", "%.0f", Lap::kLaneMin, 1.0f,
-      countOf(Lap::kLaneMin, Lap::kLaneMax, 1.0f),
+    { "LANE", "%.0f", L::kLaneMin, 1.0f,
+      countOf(L::kLaneMin, L::kLaneMax, 1.0f),
       [](const Settings& s) { return static_cast<float>(s.lane); },
       [](Settings& s, float v) { s.lane = static_cast<uint8_t>(v); } },
-    { "LANE WIDTH", "%.2f m", Lap::kLaneWidthMinM, Lap::kLaneWidthStepM,
-      countOf(Lap::kLaneWidthMinM, Lap::kLaneWidthMaxM, Lap::kLaneWidthStepM),
+    { "LANE WIDTH", "%.2f m", L::kLaneWidthMinM, L::kLaneWidthStepM,
+      countOf(L::kLaneWidthMinM, L::kLaneWidthMaxM, L::kLaneWidthStepM),
       [](const Settings& s) { return s.laneWidthM; },
       [](Settings& s, float v) { s.laneWidthM = v; } },
-    { "MISSED LAP", "%.0f %%", Lap::kMissedPctMin, Lap::kMissedPctStep,
-      countOf(Lap::kMissedPctMin, Lap::kMissedPctMax, Lap::kMissedPctStep),
+    { "MISSED LAP", "%.0f %%", L::kMissedPctMin, L::kMissedPctStep,
+      countOf(L::kMissedPctMin, L::kMissedPctMax, L::kMissedPctStep),
       [](const Settings& s) { return static_cast<float>(s.missedLapPct); },
       [](Settings& s, float v) { s.missedLapPct = static_cast<uint8_t>(v); } },
-    { "GUARD LEVEL", "%.0f %%", Lap::kEarlyPctMin, Lap::kEarlyPctStep,
-      countOf(Lap::kEarlyPctMin, Lap::kEarlyPctMax, Lap::kEarlyPctStep),
+    { "GUARD LEVEL", "%.0f %%", L::kEarlyPctMin, L::kEarlyPctStep,
+      countOf(L::kEarlyPctMin, L::kEarlyPctMax, L::kEarlyPctStep),
       [](const Settings& s) { return static_cast<float>(s.earlyPressPct); },
       [](Settings& s, float v) { s.earlyPressPct = static_cast<uint8_t>(v); } },
 };
@@ -56,13 +56,13 @@ constexpr Range kRanges[] = {
 constexpr bool fitsLists()
 {
     for (const Range& range : kRanges) {
-        if (range.count > 81) {
+        if (range.count > MenuSettingValueScreen::kMaxCount) {
             return false;
         }
     }
     return true;
 }
-static_assert(fitsLists(), "value lists are sized for 81 entries");
+static_assert(fitsLists(), "a value list exceeds MenuSettingValueScreen::kMaxCount");
 
 const Range& rangeOf(MenuSettingValueScreen::Kind kind) { return kRanges[static_cast<size_t>(kind)]; }
 } // namespace

@@ -169,19 +169,19 @@ bool SettingsSerializer::load(Settings &settings)
         ? static_cast<Settings::Mode>(mode)
         : Settings::Mode::Indoor;
 
-    reader.get("lap_length_m", settings.lapLengthM);
-    reader.get("lane",         settings.lane);
-    reader.get("lane_width_m", settings.laneWidthM);
-    settings.lapLengthM = std::clamp(settings.lapLengthM, Settings::Lap::kLengthMinM, Settings::Lap::kLengthMaxM);
-    settings.lane       = std::clamp(settings.lane, Settings::Lap::kLaneMin, Settings::Lap::kLaneMax);
-    settings.laneWidthM = std::clamp(settings.laneWidthM, Settings::Lap::kLaneWidthMinM, Settings::Lap::kLaneWidthMaxM);
-
+    using L = Settings::Limits;
+    reader.get("lap_length_m",         settings.lapLengthM);
+    reader.get("lane",                 settings.lane);
+    reader.get("lane_width_m",         settings.laneWidthM);
     reader.get("lap_reminder_en",      settings.lapReminderEn);
     reader.get("missed_lap_pct",       settings.missedLapPct);
     reader.get("early_press_guard_en", settings.earlyPressGuardEn);
     reader.get("early_press_pct",      settings.earlyPressPct);
-    settings.missedLapPct  = std::clamp(settings.missedLapPct, Settings::Lap::kMissedPctMin, Settings::Lap::kMissedPctMax);
-    settings.earlyPressPct = std::clamp(settings.earlyPressPct, Settings::Lap::kEarlyPctMin, Settings::Lap::kEarlyPctMax);
+    settings.lapLengthM    = std::clamp(settings.lapLengthM,    L::kLapLengthMinM, L::kLapLengthMaxM);
+    settings.lane          = std::clamp(settings.lane,          L::kLaneMin,       L::kLaneMax);
+    settings.laneWidthM    = std::clamp(settings.laneWidthM,    L::kLaneWidthMinM, L::kLaneWidthMaxM);
+    settings.missedLapPct  = std::clamp(settings.missedLapPct,  L::kMissedPctMin,  L::kMissedPctMax);
+    settings.earlyPressPct = std::clamp(settings.earlyPressPct, L::kEarlyPctMin,   L::kEarlyPctMax);
 
     reader.get("intervals.repeats_num",   settings.intervals.repeatsNum);
     reader.get("intervals.run_time",      settings.intervals.runTime);

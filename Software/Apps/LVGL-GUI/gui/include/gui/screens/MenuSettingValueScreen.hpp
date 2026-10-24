@@ -19,6 +19,8 @@ class MenuSettingValueScreen : public Screen
 public:
     enum class Kind : uint8_t { LapLength, Lane, LaneWidth, MissedLap, EarlyPress };
 
+    static constexpr uint16_t kMaxCount = 81;
+
     MenuSettingValueScreen(Model& model, Kind kind);
 
     void onShow() override;
@@ -30,8 +32,6 @@ protected:
     void build() override;
 
 private:
-    static constexpr uint16_t kMaxCount = 81;
-
     void save();
 
     Kind mKind;

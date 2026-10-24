@@ -500,18 +500,16 @@ void Service::handleEvent(const CustomMessage::TrackResume& /*event*/)
 void Service::handleEvent(const CustomMessage::ManualLap& /*event*/)
 {
     if (usesGps()) {
-        saveLap();
+        saveLap(false);
     } else {
         if (isEarlyPress()) {
             rejectPress();
             return;
         }
-        const std::optional<float> lapM = endSegment();
+        const bool anchored = endSegment().has_value();
         mDistance.beginSegment(lapSegment());
-        if (lapM) {
-            publishExactLap(*lapM);
-        }
-        saveLap(lapM);
+        publishLap();
+        saveLap(anchored);
     }
     SDK::send_msg<CustomMessage::LapEnded>(mKernel, mTrackData.lapNum);
     notifyLapEnd();
@@ -538,14 +536,13 @@ std::optional<TrackDistance::Segment> Service::lapSegment() const
     if (usesGps()) {
         return std::nullopt;
     }
-    return TrackDistance::Segment{ mSettings.laneLapLengthM(), true };
+    return TrackDistance::Segment{ mSettings.laneLapLengthM(), TrackDistance::Segment::Kind::Lap };
 }
 
 bool Service::isEarlyPress() const
 {
     return !usesGps() && mSettings.earlyPressGuardEn &&
-           mDistance.isEarlyPress(mEstimator.distanceM(), mCorrector.k(),
-                                  static_cast<float>(mSettings.earlyPressPct) / 100.0f);
+           mDistance.isEarlyPress(mEstimator.distanceM(), mCorrector.k(), mSettings.earlyPressFraction());
 }
 
 void Service::rejectPress()
@@ -557,19 +554,17 @@ void Service::remindOfMark()
 {
     const float rawTotalM = mEstimator.distanceM();
     const auto  mark      = mDistance.markM(rawTotalM, mCorrector.k());
-    if (!mSettings.lapReminderEn || !mark || *mark == mRemindedMarkM) {
-        return;
-    }
-    if (*mark - mDistance.estimate(rawTotalM, mCorrector.k()) <= skReminderDistanceM) {
-        mRemindedMarkM = *mark;
+    const auto  left      = mDistance.toMarkM(rawTotalM, mCorrector.k());
+    if (mSettings.lapReminderEn && left && *left <= skReminderDistanceM && mark != mRemindedMarkM) {
+        mRemindedMarkM = mark;
         playVibroPattern(SDK::Message::RequestVibroPlay::Effect::STRONG_CLICK_100);
     }
 }
 
-void Service::publishExactLap(float lapM)
+void Service::publishLap()
 {
-    mTrackData.lapDistance = lapM;
-    mTrackData.avgLapSpeed = speedFromTotals(lapM, static_cast<float>(mTrackData.lapTime));
+    mTrackData.lapDistance = mDistanceCounter.getLapValueActive();
+    mTrackData.avgLapSpeed = speedFromTotals(mTrackData.lapDistance, static_cast<float>(mTrackData.lapTime));
     mTrackData.lapPace     = getPace(mTrackData.avgLapSpeed, mSpeedCounter.getMinValid());
     SDK::send_msg<CustomMessage::TrackDataUpd>(mKernel, mTrackData);
 }
@@ -838,10 +833,10 @@ void Service::startTrack(std::time_t utc)
 
     mCalibrationStore.load();
     mCorrector             = SegmentCorrector(mCalibrationStore.prior(mSettings.lapLengthM, mSettings.lane));
-    mDistance              = TrackDistance(static_cast<float>(mSettings.missedLapPct) / 100.0f);
+    mDistance              = TrackDistance(mSettings.missedLapFraction());
     mDistance.beginSegment(lapSegment());
     mSegmentStartActiveSec = 0;
-    mRemindedMarkM         = -1.0f;
+    mRemindedMarkM         = std::nullopt;
     mAnchoredThisSession   = false;
 
     mSessionNotEmpty = false;
@@ -919,18 +914,8 @@ void Service::processTrack()
     mTrackData.distance = mDistanceCounter.getValueActive();
     mTrackData.lapDistance = mDistanceCounter.getLapValueActive();
 
-    // Speed, m/s
-    //
-    // The live speed and pace shown to the user are the rolling-window mean of
-    // the GPS speed, not the latest sample: a single sample's noise moves the
-    // pace readout by tens of seconds per kilometre, which is unusable for
-    // holding a target pace. Fed here rather than from the GPS_SPEED callback so
-    // the window advances once per track tick even when a sample is missing,
-    // which ages a lost fix out of the window instead of holding it forward.
-    // Advanced only while ACTIVE, so the readout freezes for the duration of a
-    // pause. That is a deliberate change: VariableCounter::add() latches its
-    // current value before its own pause check, so the old readout went on
-    // tracking the raw speed of a standing runner while the activity was paused.
+    // Outdoors the live speed is a rolling mean of the GPS speed, advanced once
+    // per active tick so a lost fix ages out and a pause freezes the readout.
     if (usesGps()) {
         if (mTrackState == Track::State::ACTIVE) {
             mSpeedSmoother.tick(mGpsSpeedMs, mGpsSpeedValid && mGpsSpeedFresh);
@@ -983,10 +968,10 @@ void Service::processTrack()
     }
 }
 
-void Service::saveLap(std::optional<float> exactDistanceM)
+void Service::saveLap(bool anchored)
 {
     const auto  lapTime     = mTimeCounter.getLapValueActive();
-    const float lapDistance = exactDistanceM.value_or(mDistanceCounter.getLapValueActive());
+    const float lapDistance = mDistanceCounter.getLapValueActive();
     const float lapSpeed    = speedFromTotals(lapDistance, static_cast<float>(lapTime));
 
     // Accumulate lap into summary
@@ -1020,7 +1005,7 @@ void Service::saveLap(std::optional<float> exactDistanceM)
 
     fitLap.hrAvg     = mHrCounter.getLapAverage();
     fitLap.hrMax     = mHrCounter.getLapMaximum();
-    fitLap.anchored  = exactDistanceM.has_value();
+    fitLap.anchored  = anchored;
 
     // Link this lap to its workout_step (intervals only; left INVALID otherwise).
     if (mIntervalsMode && mIntervalsStepMap.valid) {
@@ -1079,7 +1064,7 @@ void Service::stopTrack(bool discard)
         }
 
         if (mLapNotEmpty) {
-            saveLap();
+            saveLap(false);
         }
 
         // No final record: the activity ends at the pause instant below, so a
@@ -1457,14 +1442,14 @@ std::optional<TrackDistance::Segment> Service::phaseSegment() const
     }
     const float lengthM = iv.phase == Track::IntervalsPhase::RUN ? mSettings.intervals.runDistance
                                                                  : mSettings.intervals.restDistance;
-    return TrackDistance::Segment{ lengthM, false };
+    return TrackDistance::Segment{ lengthM, TrackDistance::Segment::Kind::Rep };
 }
 
 void Service::closeIntervalsPhase()
 {
-    const std::optional<float> phaseM = usesGps() ? std::nullopt : endSegment();
+    const bool anchored = !usesGps() && endSegment().has_value();
     if (mLapNotEmpty) {
-        saveLap(phaseM);
+        saveLap(anchored);
     }
 }
 

@@ -46,10 +46,7 @@ private:
     static constexpr uint32_t skBatteryLogPeriodMs   = 5 * 60 * 1000;
     static constexpr float    skFusionSampleRateHz   = 100.0f;
 
-    /// Window, in 1 Hz track ticks, over which the live pace / speed readout is
-    /// averaged. Ten seconds cuts the GPS speed noise to about a third -- enough
-    /// to hold a target pace by -- while still tracking a real change of effort
-    /// fast enough to be useful inside an interval repeat.
+    /// Window, in 1 Hz ticks, of the outdoor GPS pace readout.
     static constexpr std::size_t skPaceSmoothingTicks = 10;
 
     // -- Infrastructure -------------------------------------------------------
@@ -94,12 +91,12 @@ private:
     std::time_t                               mLastTickUtc = 0;
 
     // Known-distance segments (track laps, interval reps) correct the model's distance.
-    CalibrationStore  mCalibrationStore;
-    SegmentCorrector  mCorrector;
-    TrackDistance     mDistance;
-    std::time_t       mSegmentStartActiveSec = 0;
-    float             mRemindedMarkM         = -1.0f;
-    bool              mAnchoredThisSession   = false;
+    CalibrationStore     mCalibrationStore;
+    SegmentCorrector     mCorrector;
+    TrackDistance        mDistance{ Settings{}.missedLapFraction() };
+    std::time_t          mSegmentStartActiveSec = 0;
+    std::optional<float> mRemindedMarkM;
+    bool                 mAnchoredThisSession   = false;
 
     // -- GPS speed (outdoor mode) ---------------------------------------------
 
@@ -114,10 +111,7 @@ private:
     SDK::Metric::MonotonicCounter<std::time_t>          mTimeCounter;
     SDK::Metric::MonotonicCounter<float>                mDistanceCounter;
     SDK::Metric::VariableCounter                        mSpeedCounter;
-    /// Smooths the GPS speed for the live pace / speed readout only; the FIT
-    /// record series and the maxima stay on the unsmoothed samples in
-    /// mSpeedCounter. The averages are not involved either way -- they come
-    /// from the distance and time totals, not from a mean of these samples.
+    /// Smooths the outdoor GPS speed for the live readout only.
     SDK::Metric::SpeedSmoother<skPaceSmoothingTicks>    mSpeedSmoother;
     SDK::Metric::VariableCounter                        mHrCounter;
     uint8_t                                             mHrSource = 0;      ///< Latest HR source (HeartRateEx::Source) for the icon + FIT hr_source.
@@ -206,15 +200,15 @@ private:
     void sendInitialInfoToGui();
     void startTrack(std::time_t utc);
     void processTrack();
-    void saveLap(std::optional<float> exactDistanceM = std::nullopt);
+    void saveLap(bool anchored);
     /// Ends the current segment at its mark and corrects the pace with it. Returns the length it covered, when known.
     std::optional<float> endSegment();
     std::optional<TrackDistance::Segment> lapSegment() const;
     bool isEarlyPress() const;
     void rejectPress();
     void remindOfMark();
-    /// The lap popup reads the last snapshot, so give it the exact lap.
-    void publishExactLap(float lapM);
+    /// The lap popup reads the last snapshot, so refresh its lap fields before the lap is saved.
+    void publishLap();
     void stopTrack(bool discard);
     void pauseTrack(bool pause);
     void buildPartialSummary();
@@ -228,11 +222,11 @@ private:
     void processIntervals();
     void onIntervalsPhaseChange(bool alert, bool manual);
 
-    /// A set distance run on a track ends on the runner's press.
+    /// The segment of a set distance phase on a track, which ends on the runner's press.
     std::optional<TrackDistance::Segment> phaseSegment() const;
     /// Ends the phase as its own lap, anchoring the pace to the phase distance when it has one.
     void closeIntervalsPhase();
-    /// Repeated prompt while a distance phase has reached its distance and awaits the press.
+    /// Repeated prompt while a distance phase awaits the press.
     void promptPhaseEnd();
 
     /// Build the workout_step list from the intervals config, emit the workout /

@@ -24,13 +24,13 @@ struct Settings {
     /// Indoor: no GPS, pace from cadence. Outdoor: GPS is connected as well.
     enum class Mode : uint8_t { Indoor, Outdoor };
 
-    /// The lap the track mode corrects its pace against.
-    struct Lap {
-        static constexpr float   kLengthMinM  = 100.0f;
-        static constexpr float   kLengthMaxM  = 500.0f;
-        static constexpr float   kLengthStepM = 5.0f;
-        static constexpr uint8_t kLaneMin     = 1;
-        static constexpr uint8_t kLaneMax     = 8;
+    /// Ranges of the track settings.
+    struct Limits {
+        static constexpr float   kLapLengthMinM  = 100.0f;
+        static constexpr float   kLapLengthMaxM  = 500.0f;
+        static constexpr float   kLapLengthStepM = 5.0f;
+        static constexpr uint8_t kLaneMin        = 1;
+        static constexpr uint8_t kLaneMax        = 8;
         static constexpr float   kLaneWidthMinM  = 0.80f;
         static constexpr float   kLaneWidthMaxM  = 1.30f;
         static constexpr float   kLaneWidthStepM = 0.05f;
@@ -75,23 +75,22 @@ struct Settings {
     };
 
 
-    // Fields
-    uint32_t version = kVersion;    ///< Settings version.
+    uint32_t version = kVersion;
 
-    bool autoPauseEn = false; ///< Serialized only; not on settings wheel until auto-pause is implemented.
-    bool     phoneNotifEn  = true;  ///< Flag to enable receiving phone notification when app is run.
+    bool     autoPauseEn       = false;         ///< Serialized only; auto-pause is not implemented.
+    bool     phoneNotifEn      = true;          ///< Phone notifications while the app runs.
 
-    Mode     mode          = Mode::Indoor;
-    float    lapLengthM    = 200.0f; ///< Length of the track's inner lane.
-    uint8_t  lane          = 1;      ///< Lane the user runs in; 1 is the inner lane.
-    float    laneWidthM    = 1.0f;
+    Mode     mode              = Mode::Indoor;
+    float    lapLengthM        = 200.0f;        ///< Length of the inner lane.
+    uint8_t  lane              = 1;             ///< Lane run in; 1 is the inner lane.
+    float    laneWidthM        = 1.0f;
 
-    bool     lapReminderEn     = true;  ///< Vibrate shortly before the lap or rep mark.
-    uint8_t  missedLapPct      = 20;    ///< Past the mark by this share of the lap, the press counts as forgotten.
-    bool     earlyPressGuardEn = true;  ///< Ignore a press made well before the mark.
-    uint8_t  earlyPressPct     = 50;    ///< Share of the lap a press must have covered to count.
+    bool     lapReminderEn     = true;          ///< Vibrate shortly before the lap or rep mark.
+    uint8_t  missedLapPct      = 20;            ///< Past the mark by this share of the lap, the press counts as forgotten.
+    bool     earlyPressGuardEn = true;          ///< Ignore a press made well before the mark.
+    uint8_t  earlyPressPct     = 50;            ///< Share of the lap a press must have covered to count.
 
-    Intervals intervals {};  ///< Interval training settings.
+    Intervals intervals {};
 
     /// Distance of one lap in the chosen lane (each lane outward adds a full circle of its width).
     float laneLapLengthM() const
@@ -99,6 +98,9 @@ struct Settings {
         constexpr float kTwoPi = 6.2831853f;
         return lapLengthM + kTwoPi * laneWidthM * static_cast<float>(lane - 1);
     }
+
+    float missedLapFraction() const  { return static_cast<float>(missedLapPct) / 100.0f; }
+    float earlyPressFraction() const { return static_cast<float>(earlyPressPct) / 100.0f; }
 };
 
 #endif // SETTINGS_HPP

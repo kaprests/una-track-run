@@ -92,7 +92,7 @@ void CalibrationStore::remember(float lapLengthM, uint8_t lane, SegmentCorrector
 {
     const auto existing = find(lapLengthM, lane);
     if (existing != mEntries.end()) {
-        mEntries.erase(mEntries.begin() + (existing - mEntries.cbegin()));
+        mEntries.erase(existing);
     } else if (mEntries.size() == kCapacity) {
         mEntries.erase(mEntries.begin());
     }
