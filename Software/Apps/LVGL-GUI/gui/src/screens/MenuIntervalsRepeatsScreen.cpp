@@ -26,7 +26,7 @@ void MenuIntervalsRepeatsScreen::build()
     mButtons->set(Widgets::Buttons::NONE, Widgets::Buttons::NONE,
                   Widgets::Buttons::AMBER, Widgets::Buttons::WHITE);
     mTitle     = std::make_unique<Widgets::Title>(mRoot, "REPEATS");
-    mSensorRow = std::make_unique<Widgets::SensorStatusRow>(mRoot, 0, 52, 240, 24);
+    mSensorRow = std::make_unique<Widgets::SensorStatusRow>(mRoot, 0, 52, 240, 24, mModel.usesGps());
 }
 
 void MenuIntervalsRepeatsScreen::onShow()

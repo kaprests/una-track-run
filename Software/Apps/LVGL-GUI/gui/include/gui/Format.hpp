@@ -216,38 +216,6 @@ inline void intervalsPhaseSummary(char* buf, size_t n, const char* label, Settin
     }
 }
 
-// --- Lap alert texts ---------------------------------------------------------
-
-/// "OFF", "<n> km" or "<n> mile(s)".
-inline void alertDistance(char* buf, size_t n, Settings::Alerts::Distance::Id id, bool imperial)
-{
-    if (id == Settings::Alerts::Distance::ID_OFF) {
-        snprintf(buf, n, "OFF");
-        return;
-    }
-    const unsigned v = Settings::Alerts::Distance::kValues[id];
-    if (imperial) {
-        snprintf(buf, n, "%u %s", v, v > 1 ? "miles" : "mile");
-    } else {
-        snprintf(buf, n, "%u km", v);
-    }
-}
-
-/// "OFF", "<n> min", or with @p longForm "<n> minute(s)".
-inline void alertTime(char* buf, size_t n, Settings::Alerts::Time::Id id, bool longForm)
-{
-    if (id == Settings::Alerts::Time::ID_OFF) {
-        snprintf(buf, n, "OFF");
-        return;
-    }
-    const unsigned v = Settings::Alerts::Time::kValues[id];
-    if (longForm) {
-        snprintf(buf, n, "%u %s", v, v > 1 ? "minutes" : "minute");
-    } else {
-        snprintf(buf, n, "%u min", v);
-    }
-}
-
 } // namespace Fmt
 
 #endif // FORMAT_HPP

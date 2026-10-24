@@ -19,14 +19,12 @@
 #include "SDK/SensorLayer/DataParsers/SensorDataParserGpsLocation.hpp"
 #include "SDK/SensorLayer/DataParsers/SensorDataParserGpsSpeed.hpp"
 #include "SDK/SensorLayer/DataParsers/SensorDataParserGpsDistance.hpp"
-#include "SDK/SensorLayer/DataParsers/SensorDataParserPressure.hpp"
 #include "SDK/SensorLayer/DataParsers/SensorDataParserHeartRateEx.hpp"
 #include "SDK/SensorLayer/DataParsers/SensorDataParserBatteryLevel.hpp"
 #include "SDK/SensorLayer/DataParsers/SensorDataParserBatteryMetrics.hpp"
 #include "SDK/SensorLayer/DataParsers/SensorDataParserWristMotion.hpp"
 #include "SDK/SensorLayer/DataParsers/SensorDataParserFusionRaw.hpp"
 #include "SDK/SensorLayer/DataParsers/SensorDataParserRunningCadence.hpp"
-#include "SDK/SensorLayer/DataParsers/SensorDataParserGrade.hpp"
 
 #include "SDK/Calibration/StrideMath.hpp"
 
@@ -63,33 +61,25 @@ Service::Service(SDK::Kernel &kernel)
         , mSummary{}
         , mActivitySummarySerializer(mKernel, "Activity/summary.json")
         , mActivityWriter(mKernel, "Activity")
-        , mTrackMapBuilder{}
         , mSensorGpsLocation(SDK::Sensor::Type::GPS_LOCATION, skSamplePeriod, skSampleLatency)
         , mSensorGpsSpeed(SDK::Sensor::Type::GPS_SPEED, skSamplePeriod, skSampleLatency)
         , mSensorGpsDistance(SDK::Sensor::Type::GPS_DISTANCE, skSamplePeriod, skSampleLatency)
-        , mSensorPressure(SDK::Sensor::Type::PRESSURE, skSamplePeriod, skSampleLatency)
         , mSensorHr(SDK::Sensor::Type::HEART_RATE_EX, skSamplePeriod, skSampleLatency)
         , mSensorBatteryLevel(SDK::Sensor::Type::BATTERY_LEVEL)
         , mSensorBatteryMetrics(SDK::Sensor::Type::BATTERY_METRICS, skSamplePeriod, skSampleLatency)
         , mSensorWristMotion(SDK::Sensor::Type::WRIST_MOTION)
         , mSensorFusion(SDK::Sensor::Type::FUSION_RAW, 1000.0f / skFusionSampleRateHz, 100)
         , mSensorRunningCadence(SDK::Sensor::Type::RUNNING_CADENCE, skSamplePeriod, skSampleLatency)
-        , mSensorGrade(SDK::Sensor::Type::GRADE, skSamplePeriod, skSampleLatency)
         , mTimeTracker(kernel.sys)
-        , mAltitudeFilter(0.8f)
-        , mAltitudeCounter()
         , mBatterySoc(kernel.sys)
         , mBatteryVoltage(kernel.sys)
         , mWristTiltDetector()
-        , mCalibrator(mKernel.fs)
-
 {
     mTimeCounter.init();
     mDistanceCounter.init();
     mSpeedCounter.init(0.5f, 300.0f);
     mSpeedSmoother.init(0.5f, 300.0f);  // same valid range as the raw counter
     mHrCounter.init(20.0f, 300.0f);
-    mAltitudeCounter.init(2.0f);
 
     WristTiltDetector::Config config{};
     config.sampleRateHz = skFusionSampleRateHz;
@@ -290,13 +280,13 @@ void Service::connectSensors()
     // session. Already-connected sensors are skipped, so there is no churn.
     if (!mSensorBatteryLevel.isConnected())   { mSensorBatteryLevel.connect(); }
     if (!mSensorBatteryMetrics.isConnected()) { mSensorBatteryMetrics.connect(); }
-    if (!mSensorGpsSpeed.isConnected())       { mSensorGpsSpeed.connect(); }
-    if (!mSensorGpsDistance.isConnected())    { mSensorGpsDistance.connect(); }
-    if (!mSensorPressure.isConnected())       { mSensorPressure.connect(); }
+    if (mSettings.mode == Settings::Mode::Outdoor) {
+        if (!mSensorGpsSpeed.isConnected())    { mSensorGpsSpeed.connect(); }
+        if (!mSensorGpsDistance.isConnected()) { mSensorGpsDistance.connect(); }
+    }
     if (!mSensorHr.isConnected())             { mSensorHr.connect(); }
     if (!mSensorFusion.isConnected())         { mSensorFusion.connect(); }
     if (!mSensorRunningCadence.isConnected()) { mSensorRunningCadence.connect(); }
-    if (!mSensorGrade.isConnected())          { mSensorGrade.connect(); }
 
     mIsSensorsConnected = true;
 }
@@ -306,11 +296,9 @@ void Service::disconnect()
     if (mIsSensorsConnected) {
         LOG_DEBUG("Disconnect from sensors...\n");
 
-        mSensorGrade.disconnect();
         mSensorFusion.disconnect();
         mSensorRunningCadence.disconnect();
         mSensorHr.disconnect();
-        mSensorPressure.disconnect();
         mSensorGpsSpeed.disconnect();
         mSensorGpsDistance.disconnect();
         mSensorBatteryLevel.disconnect();
@@ -339,7 +327,8 @@ void Service::handleSensorsData(uint16_t handle, SDK::Sensor::DataBatch& data)
             mGps.fix = parser.isCoordinatesValid();
 
             if (mGps.fix) { // Do not change position if no fix
-                parser.getCoordinates(mGps.latitude, mGps.longitude, mGps.altitude);
+                float altitude = 0.0f;
+                parser.getCoordinates(mGps.latitude, mGps.longitude, altitude);
             }
             LOG_DEBUG("Location: fix %u, lat %f, lon %f\n", mGps.fix, mGps.latitude, mGps.longitude);
         }
@@ -359,31 +348,11 @@ void Service::handleSensorsData(uint16_t handle, SDK::Sensor::DataBatch& data)
             LOG_DEBUG("Speed:    %.2f m/s (valid %u, dr %u)\n",
                       mGpsSpeedMs, mGpsSpeedValid, mGpsDeadReckoning);
         }
-    } else if (mSensorGrade.matchesDriver(handle)) {
-        SDK::SensorDataParser::Grade parser(data[0]);
-        if (parser.isDataValid()) {
-            mGradeData.gradePct   = parser.getGradePct();
-            mGradeData.gradeValid = parser.isGradeValid();
-            LOG_DEBUG("Grade:    %.2f %% (valid %u)\n",
-                      mGradeData.gradePct, mGradeData.gradeValid);
-        }
     } else if (mSensorGpsDistance.matchesDriver(handle)) {
         SDK::SensorDataParser::GpsDistance parser(data[0]);
         if (parser.isDataValid()) {
             mDistanceCounter.add(parser.getDistance());
             LOG_DEBUG("Distance: %.2f m\n", parser.getDistance());
-        }
-    } else if (mSensorPressure.matchesDriver(handle)) {
-        SDK::SensorDataParser::Pressure parser(data[0]);
-        if (parser.isDataValid()) {
-            if (!mAltitudeCounter.isValid()) {
-                mSeaLevelPressure = parser.getP0();
-            }
-            float altitude = parser.getAltitude(parser.getPressure(), mSeaLevelPressure);
-            float filtered = mAltitudeFilter.execute(altitude);
-            mAltitudeCounter.add(filtered);
-
-            LOG_DEBUG("Altitude %.2f (Filtered %.2f) (P0 %f, Pa %f)\n", altitude, filtered, mSeaLevelPressure, parser.getPressure());
         }
     } else if (mSensorHr.matchesDriver(handle)) {
         SDK::SensorDataParser::HeartRateEx parser(data[0]);
@@ -459,18 +428,20 @@ void Service::onStartGUI()
     setCapabilities();
     requestAccessoryPrepare();   // pre-warm external HR while on the pre-activity screen
 
-    // GPS stays wanted from the pre-activity screen until the activity ends
-    // (cleared in disconnect()), so the run() loop keeps it connected during the
-    // activity but never re-wakes the GNSS on the post-activity summary screen.
-    mGpsWanted = true;
+    if (mSettings.mode == Settings::Mode::Outdoor) {
+        // GPS stays wanted from the pre-activity screen until the activity ends
+        // (cleared in disconnect()), so the run() loop keeps it connected during the
+        // activity but never re-wakes the GNSS on the post-activity summary screen.
+        mGpsWanted = true;
 
-    // Subscribe to GPS to get fix. If this first attempt loses the ~100 ms
-    // startup ack race, the run() loop retries; track the outcome so the retry
-    // logs the recovery (and field logs reveal how often the race fires).
-    connectGps();
-    mGpsInitialConnectFailed = !mSensorGpsLocation.isConnected();
-    if (mGpsInitialConnectFailed) {
-        LOG_WARNING("GPS location subscribe lost the startup race; will retry\n");
+        // Subscribe to GPS to get fix. If this first attempt loses the ~100 ms
+        // startup ack race, the run() loop retries; track the outcome so the retry
+        // logs the recovery (and field logs reveal how often the race fires).
+        connectGps();
+        mGpsInitialConnectFailed = !mSensorGpsLocation.isConnected();
+        if (mGpsInitialConnectFailed) {
+            LOG_WARNING("GPS location subscribe lost the startup race; will retry\n");
+        }
     }
 
     mSensorWristMotion.connect();
@@ -676,9 +647,6 @@ ActivityWriter::RecordData Service::prepareRecordData()
     fitRecord.set(ActivityWriter::RecordData::Field::SPEED, mSpeedCounter.isValid());
     fitRecord.speed        = mSpeedCounter.getCurrent();
 
-    fitRecord.set(ActivityWriter::RecordData::Field::ALTITUDE, mAltitudeCounter.isValid());
-    fitRecord.altitude     = mAltitudeCounter.getCurrent();
-
     bool hasHeartRate = (mHrCounter.getCurrent() > 20 && mTrackData.hrTrustLevel >= 1 && mTrackData.hrTrustLevel <= 3);
     fitRecord.set(ActivityWriter::RecordData::Field::HEART_RATE, hasHeartRate);
     fitRecord.heartRate    = mHrCounter.getCurrent();
@@ -769,25 +737,14 @@ void Service::startTrack(std::time_t utc)
     mHrSource = 0;  // don't carry a prior track's HR source/readings into the new session
     mHrOpticalBpm = 0;
     mHrExternalBpm = 0;
-    mAltitudeFilter.reset();
-    mAltitudeCounter.reset();
     mBatterySoc.reset(skBatteryLogPeriodMs);
     mBatteryVoltage.reset(skBatteryLogPeriodMs);
     mGps.reset();
     mRunningCadence = {};
 
-    // Outdoor stride calibrator: reset latched inputs and load the stored LUT
-    // for this session.
-    mGradeData = {};
     mGpsSpeedValid    = false;
     mGpsSpeedFresh    = false;
     mGpsDeadReckoning = false;
-    mLastCalibUtc     = 0;
-    mCalibrator.load();
-    if (mSettings.calibTraceEn) {
-        // Debug: per-tick CSV trace pulled over USB mass storage.
-        mCalibrator.enableTrace("../SharedData/stride_trace.csv");
-    }
 
     mSessionNotEmpty = false;
     mLapNotEmpty = false;
@@ -813,16 +770,6 @@ void Service::startTrack(std::time_t utc)
             startIntervalsPhase(Track::IntervalsPhase::RUN);
         }
     }
-
-    // Configure TrackMapBuilder
-    mTrackMapBuilder.reset();
-    SDK::TrackMapBuilder::GpsPoint startGpsPoint{ mGps.latitude, mGps.longitude };
-    mTrackMapBuilder.setDistanceThreshold(startGpsPoint, skMapDistanceThreshold);
-
-    // Determine lap split source. In intervals mode each phase (warm up / run /
-    // rest / cool down) is recorded as its own lap, so the alert-based auto-lap
-    // is disabled to avoid splitting a phase across multiple laps.
-    mLapDivSource = mIntervalsMode ? LapDivSource::OFF : getLapDivSource();
 
     mWristTiltDetector.reset();
 
@@ -853,13 +800,6 @@ void Service::processTrack()
     // once everything is connected, and it runs only while the track is active
     // (processTrack) so it never re-powers sensors after the track ends.
     connectSensors();
-
-    // Creating map
-    SDK::TrackMapBuilder::GpsPoint newPoint{ mGps.latitude, mGps.longitude };
-    // Add point to the track map
-    if (mGps.fix && mTrackState == Track::State::ACTIVE) {
-        mTrackMapBuilder.addPoint(newPoint);
-    }
 
     // Time, s
     mTrackData.totalTime = mTimeCounter.getValueActive();
@@ -909,9 +849,6 @@ void Service::processTrack()
     mTrackData.maxLapHR = mHrCounter.getLapMaximum();
 
 
-    // Altitude, m
-    mTrackData.elevation = mAltitudeCounter.getCurrent();
-
     // Intervals state machine - only while actively running (not paused)
     if (mIntervalsMode && mTrackState == Track::State::ACTIVE) {
         processIntervals();
@@ -922,90 +859,19 @@ void Service::processTrack()
 
 
     if (mTrackState == Track::State::ACTIVE) {
-        // Feed the outdoor stride calibrator from the latest latched values,
-        // inline at the 1 Hz record-write point and before the FIT write.
-        {
-            SDK::Calibration::CalibratorSample cs;
-            cs.gps_speed_ms           = mGpsSpeedMs;
-            cs.gps_speed_valid        = mGpsSpeedValid;
-            cs.gps_fix_dead_reckoning = mGpsDeadReckoning;
-            cs.cadence_spm            = mRunningCadence.cadenceSpm;
-            cs.cadence_valid          = mRunningCadence.cadenceValid;
-            cs.grade_pct              = mGradeData.gradePct;
-            cs.grade_valid            = mGradeData.gradeValid;
-
-            const std::time_t nowUtc = mTimeCounter.getCurrent();
-            cs.delta_t_s = (mLastCalibUtc == 0)
-                ? 1.0f
-                : static_cast<float>(nowUtc - mLastCalibUtc);
-            mLastCalibUtc = nowUtc;
-
-            mCalibrator.ingestSample(cs);
-        }
-
         // Save record to the FIT file
         ActivityWriter::RecordData fitRecord = prepareRecordData();
         mActivityWriter.addRecord(fitRecord);
 
         mSessionNotEmpty = true;    // Session has at least one record
         mLapNotEmpty = true;        // Lap has at least one record
-
-        // Next lap
-        bool  switchLap        = false;
-        float autoLapDistanceM = 0.0f;  // >0 marks a grid-aligned distance auto-lap
-        switch (mLapDivSource) {
-        case LapDivSource::DISTANCE: {
-            const float target = Settings::Alerts::Distance::toMeters(mSettings.alertDistanceId, mIsImperial);
-            if (mDistanceCounter.getLapValueActive() >= target) {
-                switchLap        = true;
-                autoLapDistanceM = target;
-            }
-            break;
-        }
-        case LapDivSource::TIME:
-            switchLap = static_cast<uint32_t>(mTimeCounter.getLapValueActive()) >= Settings::Alerts::Time::toSeconds(mSettings.alertTimeId);
-            break;
-
-        case LapDivSource::OFF:
-        default:
-            break;
-        }
-
-        if (switchLap) {
-            // A distance auto-lap is recorded at exactly the target distance,
-            // with the overshoot carried into the next lap. Before saveLap()
-            // (which increments lapNum and resets the lap counters), refresh the
-            // lap fields the lap-alert popup reads so its pace is computed over
-            // that same grid distance -- the live snapshot pushed earlier this
-            // tick holds the small overshoot, whose pace would disagree with the
-            // lap's whole-second duration. lapTime is still the completed lap's.
-            if (autoLapDistanceM > 0.0f) {
-                mTrackData.lapDistance = autoLapDistanceM;
-                mTrackData.avgLapSpeed = speedFromTotals(autoLapDistanceM,
-                                                         static_cast<float>(mTrackData.lapTime));
-                mTrackData.lapPace     = getPace(mTrackData.avgLapSpeed, mSpeedCounter.getMinValid());
-                SDK::send_msg<CustomMessage::TrackDataUpd>(mKernel, mTrackData);
-            }
-
-            saveLap(autoLapDistanceM);
-            SDK::send_msg<CustomMessage::LapEnded>(mKernel, mTrackData.lapNum);
-            notifyLapEnd();
-        }
-
     }
-
 }
 
-void Service::saveLap(float autoLapDistanceM)
+void Service::saveLap()
 {
     const auto  lapTime     = mTimeCounter.getLapValueActive();
-    // A distance auto-lap (autoLapDistanceM > 0) is recorded as exactly the
-    // target distance; the overshoot is carried into the next lap below. This
-    // keeps lap boundaries on the km/mi grid and makes the reported lap pace
-    // agree with the lap duration.
-    const bool  gridLap     = autoLapDistanceM > 0.0f;
-    const float lapDistance = gridLap ? autoLapDistanceM
-                                      : mDistanceCounter.getLapValueActive();
+    const float lapDistance = mDistanceCounter.getLapValueActive();
     const float lapSpeed    = speedFromTotals(lapDistance, static_cast<float>(lapTime));
 
     // Accumulate lap into summary
@@ -1040,9 +906,6 @@ void Service::saveLap(float autoLapDistanceM)
     fitLap.hrAvg     = mHrCounter.getLapAverage();
     fitLap.hrMax     = mHrCounter.getLapMaximum();
 
-    fitLap.ascent    = mAltitudeCounter.getLapAscent();
-    fitLap.descent   = mAltitudeCounter.getLapDescent();
-
     // Link this lap to its workout_step (intervals only; left INVALID otherwise).
     if (mIntervalsMode && mIntervalsStepMap.valid) {
         fitLap.wktStepIndex = intervalsWktStepIndex();
@@ -1056,18 +919,12 @@ void Service::saveLap(float autoLapDistanceM)
     LOG_INFO("Distance: %.3f m\n", lapDistance);
     LOG_INFO("Speed: %.3f / %.3f m/s\n", lapSpeed, mSpeedCounter.getLapMaximum());
     LOG_INFO("Heart rate: %.0f / %.0f bpm\n", mHrCounter.getLapAverage(), mHrCounter.getLapMaximum());
-    LOG_INFO("Ascent/Descent: %.1f / %.1f m\n", mAltitudeCounter.getLapAscent(), mAltitudeCounter.getLapDescent());
 
     // Reset lap counters
     mTimeCounter.resetLap();
-    if (gridLap) {
-        mDistanceCounter.advanceLap(lapDistance);
-    } else {
-        mDistanceCounter.resetLap();
-    }
+    mDistanceCounter.resetLap();
     mSpeedCounter.resetLap();
     mHrCounter.resetLap();
-    mAltitudeCounter.resetLap();
 
     // Clear track data
     mTrackData.lapTime = 0;
@@ -1088,11 +945,9 @@ void Service::buildPartialSummary()
     mSummary.time      = mTimeCounter.getValueActive();
     mSummary.distance  = mDistanceCounter.getValueActive();
     mSummary.speedAvg  = speedFromTotals(mSummary.distance, mSummary.time);
-    mSummary.elevation = mAltitudeCounter.getAscent();
     mSummary.paceAvg   = getPace(mSummary.speedAvg, mSpeedCounter.getMinValid());
     mSummary.hrMax     = mHrCounter.getMaximum();
     mSummary.hrAvg     = mHrCounter.getAverage();
-    mSummary.map       = mTrackMapBuilder.build(skMapMaxPoints);
 }
 
 void Service::stopTrack(bool discard)
@@ -1143,9 +998,6 @@ void Service::stopTrack(bool discard)
         fitTrack.hrAvg     = mHrCounter.getAverage();
         fitTrack.hrMax     = mHrCounter.getMaximum();
 
-        fitTrack.ascent    = mAltitudeCounter.getAscent();
-        fitTrack.descent   = mAltitudeCounter.getDescent();
-
         if (mActivityWriter.stop(fitTrack)) {
             notifyNewActivity();
         } else {
@@ -1163,19 +1015,8 @@ void Service::stopTrack(bool discard)
     LOG_INFO("Distance: %.3f m\n", mDistanceCounter.getValueActive());
     LOG_INFO("Speed: %.3f / %.3f m/s\n", speedFromTotals(mDistanceCounter.getValueActive(), mTimeCounter.getValueActive()), mSpeedCounter.getMaximum());
     LOG_INFO("Heart rate: %.0f / %.0f bpm\n", mHrCounter.getAverage(), mHrCounter.getMaximum());
-    LOG_INFO("Ascent/Descent: %.1f / %.1f m\n", mAltitudeCounter.getAscent(), mAltitudeCounter.getDescent());
 
     SDK::send_msg<CustomMessage::TrackStateUpd>(mKernel, mTrackState);
-
-    // Persist the outdoor stride LUT synchronously before the task tears down
-    // (only writes if >= 1 sample was accepted this session). finalise()
-    // returns false both when nothing was accepted (nothing to persist) and on
-    // a real write failure; only the latter is worth flagging, so gate the log
-    // on having had accepted samples this session.
-    const bool hadCalibData = mCalibrator.acceptedThisSession() > 0;
-    if (!mCalibrator.finalise() && hadCalibData) {
-        LOG_ERROR("Stride calibrator finalise failed; LUT not persisted\n");
-    }
 
     disconnect();
 }
@@ -1191,11 +1032,8 @@ void Service::pauseTrack(bool pause)
         mDistanceCounter.pause();
         mSpeedCounter.pause();
         mHrCounter.pause();
-        mAltitudeCounter.pause();
 
         mActivityWriter.pause(mTimeCounter.getCurrent());
-
-        mCalibrator.pause();   // stop ingesting, reset steady-state counter
 
         mTrackState = Track::State::PAUSED;
         LOG_INFO("Track paused. UTC: %u\n", static_cast<uint32_t>(mTimeCounter.getCurrent()));
@@ -1211,30 +1049,13 @@ void Service::pauseTrack(bool pause)
         // the break, so blending them into the resumed readout would be wrong.
         mSpeedSmoother.reset();
         mHrCounter.resume();
-        mAltitudeCounter.resume();
 
         mActivityWriter.resume(mTimeCounter.getCurrent());
-
-        mCalibrator.resume();  // restart steady-state counter from zero
-        mLastCalibUtc = 0;     // avoid a spurious cross-pause delta_t
 
         mTrackState = Track::State::ACTIVE;
         LOG_INFO("Track resumed. UTC: %u\n", static_cast<uint32_t>(mTimeCounter.getCurrent()));
         SDK::send_msg<CustomMessage::TrackStateUpd>(mKernel, mTrackState);
     }
-}
-
-Service::LapDivSource Service::getLapDivSource()
-{
-    if (mSettings.alertDistanceId != Settings::Alerts::Distance::ID_OFF) {
-        return LapDivSource::DISTANCE;
-    }
-
-    if (mSettings.alertTimeId != Settings::Alerts::Time::ID_OFF) {
-        return LapDivSource::TIME;
-    }
-
-    return LapDivSource::OFF;
 }
 
 void Service::onWristTilt(uint32_t timestampMs)

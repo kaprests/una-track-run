@@ -42,7 +42,7 @@ void MenuIntervalsMetricScreen::build()
     mButtons->set(Widgets::Buttons::NONE, Widgets::Buttons::NONE,
                   Widgets::Buttons::AMBER, Widgets::Buttons::WHITE);
     mTitle     = std::make_unique<Widgets::Title>(mRoot, mPhase == Phase::Run ? "RUN" : "REST");
-    mSensorRow = std::make_unique<Widgets::SensorStatusRow>(mRoot, 0, 52, 240, 24);
+    mSensorRow = std::make_unique<Widgets::SensorStatusRow>(mRoot, 0, 52, 240, 24, mModel.usesGps());
 }
 
 void MenuIntervalsMetricScreen::applySettings(const Settings::Intervals& iv)

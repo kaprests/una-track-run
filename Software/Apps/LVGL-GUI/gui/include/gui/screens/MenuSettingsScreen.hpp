@@ -1,7 +1,7 @@
 /**
  ******************************************************************************
  * @file    MenuSettingsScreen.hpp
- * @brief   Settings menu: Lap Alerts and the Phone Notifications toggle.
+ * @brief   Settings menu.
  ******************************************************************************
  */
 

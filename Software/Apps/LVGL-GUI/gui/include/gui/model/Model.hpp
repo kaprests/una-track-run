@@ -89,8 +89,10 @@ public:
     const Settings& getSettings() const;
     void saveSettings(const Settings& sett);
 
-    // GPS
+    // GPS: only outdoors does the activity wait for a fix.
+    bool usesGps() const;
     bool hasGpsFix() const;
+    bool canStart() const;
 
     // Latest external-HR link status (SDK::Accessory::State); the kernel only
     // sends on change, so screens read this on activate to show the current icon.

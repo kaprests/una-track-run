@@ -26,7 +26,6 @@ namespace {
     // GPS adds position; battery adds developer fields. Field order here defines
     // the on-wire order and must match the value-write order in addRecord().
     const Field kRecordCommonTail[] = {
-        fit::field::Record::EnhancedAltitude,
         fit::field::Record::EnhancedSpeed,
         fit::field::Record::HeartRate,
         fit::field::Record::Cadence,
@@ -103,7 +102,6 @@ void ActivityWriter::start(const AppInfo& info)
          fit::field::Lap::TotalElapsedTime, fit::field::Lap::TotalTimerTime,
          fit::field::Lap::TotalDistance, fit::field::Lap::MessageIndex,
          fit::field::Lap::AvgSpeed, fit::field::Lap::MaxSpeed,
-         fit::field::Lap::TotalAscent, fit::field::Lap::TotalDescent,
          fit::field::Lap::AvgHeartRate, fit::field::Lap::MaxHeartRate,
          fit::field::Lap::WktStepIndex});
     mFit->defineMessage(L_SESSION, fit::mesgNum(fit::MesgNum::Session),
@@ -111,7 +109,6 @@ void ActivityWriter::start(const AppInfo& info)
          fit::field::Session::TotalElapsedTime, fit::field::Session::TotalTimerTime,
          fit::field::Session::TotalDistance, fit::field::Session::MessageIndex,
          fit::field::Session::AvgSpeed, fit::field::Session::MaxSpeed,
-         fit::field::Session::TotalAscent, fit::field::Session::TotalDescent,
          fit::field::Session::NumLaps, fit::field::Session::Sport,
          fit::field::Session::SubSport, fit::field::Session::AvgHeartRate,
          fit::field::Session::MaxHeartRate});
@@ -146,7 +143,7 @@ void ActivityWriter::defineRecordMessages()
     mFit->defineMessage(L_RECORD, fit::mesgNum(fit::MesgNum::Record),
         {fit::field::Record::Timestamp,
          kRecordCommonTail[0], kRecordCommonTail[1], kRecordCommonTail[2],
-         kRecordCommonTail[3], kRecordCommonTail[4], kRecordCommonTail[5]},
+         kRecordCommonTail[3], kRecordCommonTail[4]},
         {hr3[0], hr3[1], hr3[2]});
 
     // + GPS.
@@ -154,14 +151,14 @@ void ActivityWriter::defineRecordMessages()
         {fit::field::Record::Timestamp,
          fit::field::Record::PositionLat, fit::field::Record::PositionLong,
          kRecordCommonTail[0], kRecordCommonTail[1], kRecordCommonTail[2],
-         kRecordCommonTail[3], kRecordCommonTail[4], kRecordCommonTail[5]},
+         kRecordCommonTail[3], kRecordCommonTail[4]},
         {hr3[0], hr3[1], hr3[2]});
 
     // + battery (5 developer fields).
     mFit->defineMessage(L_RECORD_B, fit::mesgNum(fit::MesgNum::Record),
         {fit::field::Record::Timestamp,
          kRecordCommonTail[0], kRecordCommonTail[1], kRecordCommonTail[2],
-         kRecordCommonTail[3], kRecordCommonTail[4], kRecordCommonTail[5]},
+         kRecordCommonTail[3], kRecordCommonTail[4]},
         {batt5[0], batt5[1], batt5[2], batt5[3], batt5[4]});
 
     // + GPS + battery.
@@ -169,7 +166,7 @@ void ActivityWriter::defineRecordMessages()
         {fit::field::Record::Timestamp,
          fit::field::Record::PositionLat, fit::field::Record::PositionLong,
          kRecordCommonTail[0], kRecordCommonTail[1], kRecordCommonTail[2],
-         kRecordCommonTail[3], kRecordCommonTail[4], kRecordCommonTail[5]},
+         kRecordCommonTail[3], kRecordCommonTail[4]},
         {batt5[0], batt5[1], batt5[2], batt5[3], batt5[4]});
 }
 
@@ -227,10 +224,7 @@ void ActivityWriter::addRecord(const RecordData& record)
         d.i32(record.has(RecordData::Field::COORDS) ? degreesToSemicircles(record.latitude) : 0)
          .i32(degreesToSemicircles(record.longitude));
     }
-    // enhanced_altitude (5 * m + 500), enhanced_speed (1000 * m/s)
-    d.u32(record.has(RecordData::Field::ALTITUDE)
-              ? static_cast<uint32_t>((record.altitude + 500.0f) * 5.0f)
-              : static_cast<uint32_t>(fit::baseTypeInvalid(fit::BaseType::UInt32)));
+    // enhanced_speed (1000 * m/s)
     d.u32(record.has(RecordData::Field::SPEED)
               ? static_cast<uint32_t>(record.speed * 1000.0f)
               : static_cast<uint32_t>(fit::baseTypeInvalid(fit::BaseType::UInt32)));
@@ -284,8 +278,6 @@ void ActivityWriter::addLap(const LapData& lap)
         .u16(mLapCounter)  // message_index: 0-based, incremented after this write
         .u16(static_cast<uint16_t>(lap.speedAvg * 1000))
         .u16(static_cast<uint16_t>(lap.speedMax * 1000))
-        .u16(static_cast<uint16_t>(lap.ascent))
-        .u16(static_cast<uint16_t>(lap.descent))
         .u8(static_cast<uint8_t>(lap.hrAvg))
         .u8(static_cast<uint8_t>(lap.hrMax))
         .u16(lap.wktStepIndex)
@@ -355,11 +347,9 @@ bool ActivityWriter::stop(const TrackData& track)
         .u16(0)  // message_index
         .u16(static_cast<uint16_t>(track.speedAvg * 1000))
         .u16(static_cast<uint16_t>(track.speedMax * 1000))
-        .u16(static_cast<uint16_t>(track.ascent))
-        .u16(static_cast<uint16_t>(track.descent))
         .u16(mLapCounter)
         .u8(static_cast<uint8_t>(fit::Sport::Running))
-        .u8(static_cast<uint8_t>(fit::SubSport::Generic))
+        .u8(static_cast<uint8_t>(fit::SubSport::Track))
         .u8(static_cast<uint8_t>(track.hrAvg))
         .u8(static_cast<uint8_t>(track.hrMax))
         .write() && ok;
@@ -496,7 +486,7 @@ bool ActivityWriter::saveSummary(const TrackData& track)
     writer.add("duration", static_cast<uint32_t>(track.duration));
     writer.add("distance", track.distance);
     writer.add("hr_avg", track.hrAvg);
-    writer.add("elevation", track.ascent);  // accumulated gain, matching the on-watch summary
+    writer.add("elevation", 0.0f);  // sidecar schema field; a track has no climb
     writer.add("activity_type", "running");
     writer.endMap();
 

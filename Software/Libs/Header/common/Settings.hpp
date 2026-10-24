@@ -19,37 +19,22 @@
  */
 struct Settings {
     /// Settings version.
-    static constexpr uint8_t kVersion = 1;
+    static constexpr uint8_t kVersion = 2;
 
-    struct Alerts {
-        struct Distance {
-            enum Id : uint8_t {
-                ID_OFF = 0, ID_KM_MILL_1, ID_KM_MILL_2, ID_KM_MILL_3,
-                ID_KM_MILL_4, ID_KM_MILL_5, ID_KM_MILL_10,
-                ID_COUNT, ID_DEFAULT = ID_KM_MILL_1
-            };
-            static constexpr uint16_t kValues[ID_COUNT] = { 0, 1, 2, 3, 4, 5, 10 };
+    /// Indoor: no GPS, pace from cadence. Outdoor: GPS is connected as well.
+    enum class Mode : uint8_t { Indoor, Outdoor };
 
-            static float toMeters(Id id, bool isImperial) {
-                return kValues[id] * (isImperial ? 1609.34f : 1000.0f);
-            }
-        };
-
-        struct Time {
-            enum Id : uint8_t {
-                ID_OFF = 0, ID_MIN_1, ID_MIN_5, ID_MIN_10,
-                ID_MIN_15, ID_MIN_20, ID_MIN_30,
-                ID_COUNT, ID_DEFAULT = ID_OFF
-            };
-            static constexpr uint16_t kValues[ID_COUNT] = { 0, 1, 5, 10, 15, 20, 30 };
-
-            static constexpr uint32_t toSeconds(Id id) {
-                return kValues[id] * 60u;
-            }
-        };
+    /// The lap the track mode corrects its pace against.
+    struct Lap {
+        static constexpr float   kLengthMinM  = 100.0f;
+        static constexpr float   kLengthMaxM  = 500.0f;
+        static constexpr float   kLengthStepM = 5.0f;
+        static constexpr uint8_t kLaneMin     = 1;
+        static constexpr uint8_t kLaneMax     = 8;
+        static constexpr float   kLaneWidthMinM  = 0.80f;
+        static constexpr float   kLaneWidthMaxM  = 1.30f;
+        static constexpr float   kLaneWidthStepM = 0.05f;
     };
-
-
 
     /**
      * @struct Intervals
@@ -89,12 +74,20 @@ struct Settings {
 
     bool autoPauseEn = false; ///< Serialized only; not on settings wheel until auto-pause is implemented.
     bool     phoneNotifEn  = true;  ///< Flag to enable receiving phone notification when app is run.
-    bool     calibTraceEn  = false; ///< Debug: write per-tick outdoor-stride calibrator CSV trace.
-    Alerts::Distance::Id alertDistanceId = Alerts::Distance::ID_DEFAULT; ///< Distance alert option.
-    Alerts::Time::Id     alertTimeId     = Alerts::Time::ID_OFF;     ///< Time alert option.
+
+    Mode     mode          = Mode::Indoor;
+    float    lapLengthM    = 200.0f; ///< Length of the track's inner lane.
+    uint8_t  lane          = 1;      ///< Lane the user runs in; 1 is the inner lane.
+    float    laneWidthM    = 1.0f;
 
     Intervals intervals {};  ///< Interval training settings.
 
+    /// Distance of one lap in the chosen lane (each lane outward adds a full circle of its width).
+    float laneLapLengthM() const
+    {
+        constexpr float kTwoPi = 6.2831853f;
+        return lapLengthM + kTwoPi * laneWidthM * static_cast<float>(lane - 1);
+    }
 };
 
 #endif // SETTINGS_HPP

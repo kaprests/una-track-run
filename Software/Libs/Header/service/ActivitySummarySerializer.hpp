@@ -14,11 +14,9 @@
  *     "time":125,
  *     "distance":4015.4,
  *     "speed_avg":3.64264,
- *     "elevation":98.4013,
  *     "pace_avg":0.274536,
  *     "hr_max":84,
  *     "hr_avg":74,
- *     "map":"416A426B43...6643",
  *     "lap_count":2,
  *     "laps":[
  *         {"dur":62,"dist":2010.5,"pace":4.15},

@@ -33,7 +33,6 @@
 #include "SDK/GUI/LVGL/TimerRing.hpp"
 #include "SDK/GUI/LVGL/Title.hpp"
 #include "SDK/GUI/LVGL/Toggle.hpp"
-#include "SDK/TrackMap/TrackMapScreen.hpp"
 #include "Track.hpp"
 #include "gui/theme/Theme.hpp"
 
@@ -63,11 +62,11 @@ public:
 };
 
 // -----------------------------------------------------------------------------
-/// The SDK sensor row with Run's GPS and heart icons.
+/// The SDK sensor row with the app's heart icon and, outdoors only, the GPS icon.
 class SensorStatusRow : public SDK::LVGL::SensorStatusRow
 {
 public:
-    SensorStatusRow(lv_obj_t* parent, int32_t x, int32_t y, int32_t w, int32_t h);
+    SensorStatusRow(lv_obj_t* parent, int32_t x, int32_t y, int32_t w, int32_t h, bool showGps);
 };
 
 // -----------------------------------------------------------------------------
@@ -199,22 +198,6 @@ private:
     lv_obj_t* mValRight = nullptr;
     lv_obj_t* mNext1    = nullptr;
     lv_obj_t* mNext2    = nullptr;
-};
-
-// -----------------------------------------------------------------------------
-/// The recorded route as a polyline with start (green) and end (red) markers.
-class Map
-{
-public:
-    Map(lv_obj_t* parent, int32_t x, int32_t y);
-    void setMap(const SDK::TrackMapScreen& map);
-
-private:
-    lv_obj_t* mRoot  = nullptr;
-    lv_obj_t* mLine  = nullptr;
-    lv_obj_t* mStart = nullptr;
-    lv_obj_t* mEnd   = nullptr;
-    std::vector<lv_point_precise_t> mPoints;
 };
 
 } // namespace Widgets

@@ -33,11 +33,6 @@ enum class ScreenId : uint8_t {
     MenuIntervalsRestDistance,
     // Settings
     MenuSettings,
-    MenuAlerts,
-    MenuAlertDistance,
-    MenuAlertTime,
-    MenuAlertDistanceSaved,
-    MenuAlertTimeSaved,
     // Activity
     TrackStartConfirm,
     TrackIntervalsCountdown,

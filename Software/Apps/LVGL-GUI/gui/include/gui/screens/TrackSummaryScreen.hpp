@@ -1,10 +1,9 @@
 /**
  ******************************************************************************
  * @file    TrackSummaryScreen.hpp
- * @brief   Activity summary: map, overview, heart rate and a paged lap list,
+ * @brief   Activity summary: overview, heart rate and a paged lap list,
  *          browsed with L1/L2.
  *
- * Port of the Run app's TrackSummaryView and its SummaryFace* containers.
  * Reached from the action menu while paused (R2 returns there) or after a
  * save (R1 leaves the app).
  ******************************************************************************
@@ -31,13 +30,12 @@ protected:
     void build() override;
 
 private:
-    enum Face : uint8_t { FACE_MAP = 0, FACE_OVERVIEW, FACE_HEARTRATE, FACE_LAPS };
+    enum Face : uint8_t { FACE_OVERVIEW = 0, FACE_HEARTRATE, FACE_LAPS, kFaceCount };
 
     static constexpr uint8_t kLapPageSize = 3;   ///< rows advanced per L1/L2 press
     static constexpr uint8_t kLapVisible  = 5;   ///< rows on screen at once
     static constexpr uint8_t kLapColumns  = 5;   ///< index, distance, units, time, pace
 
-    void buildFaceMap();
     void buildFaceOverview();
     void buildFaceHeartRate();
     void buildFaceLaps();
@@ -48,16 +46,13 @@ private:
     void fillLapRows();
     void backToTrack();
 
-    lv_obj_t* mFaces[4] = {};
+    lv_obj_t* mFaces[kFaceCount] = {};
 
-    // Map + overview headers
-    lv_obj_t* mMapDistance      = nullptr;
-    lv_obj_t* mMapUnits         = nullptr;
+    // Overview
     lv_obj_t* mOverviewDistance = nullptr;
     lv_obj_t* mOverviewUnits    = nullptr;
     lv_obj_t* mAvgPace          = nullptr;
     lv_obj_t* mTimer            = nullptr;
-    std::unique_ptr<Widgets::Map> mMap;
 
     // Heart rate
     lv_obj_t* mMaxHr = nullptr;
@@ -71,9 +66,9 @@ private:
 
     std::unique_ptr<Widgets::Buttons>         mButtons;
     std::unique_ptr<Widgets::ScrollIndicator> mIndicator;
-    std::unique_ptr<Widgets::Title>           mTitles[4];
+    std::unique_ptr<Widgets::Title>           mTitles[kFaceCount];
 
-    uint8_t mFace       = FACE_MAP;
+    uint8_t mFace       = FACE_OVERVIEW;
     bool    mIsImperial = false;
     bool    mPaused     = false;
     uint8_t mLapPages   = 0;

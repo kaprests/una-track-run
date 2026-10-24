@@ -43,8 +43,6 @@ private:
     void confirm();
     void updateBackground();
 
-    bool mGpsFix = false;
-
     std::unique_ptr<Widgets::Title>           mTitle;
     std::unique_ptr<Widgets::SensorStatusRow> mSensorRow;
     std::unique_ptr<Widgets::Buttons>         mButtons;

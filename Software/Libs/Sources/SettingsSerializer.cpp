@@ -10,6 +10,7 @@
  */
 #include "SettingsSerializer.hpp"
 
+#include <algorithm>
 #include <cassert>
 
 #include "SDK/JSON/JsonStreamWriter.hpp"
@@ -77,9 +78,10 @@ bool SettingsSerializer::save(const Settings &settings)
     writer.add("version",        settings.version);
     writer.add("auto_pause_en",  settings.autoPauseEn);
     writer.add("phone_notif_en", settings.phoneNotifEn);
-    writer.add("calib_trace_en", settings.calibTraceEn);
-    writer.add("alert_distance_id", static_cast<uint8_t>(settings.alertDistanceId));
-    writer.add("alert_time_id",     static_cast<uint8_t>(settings.alertTimeId));
+    writer.add("mode",           static_cast<uint8_t>(settings.mode));
+    writer.add("lap_length_m",   settings.lapLengthM);
+    writer.add("lane",           settings.lane);
+    writer.add("lane_width_m",   settings.laneWidthM);
 
     writer.startMap("intervals");
     writer.add("repeats_num",   settings.intervals.repeatsNum);
@@ -156,25 +158,19 @@ bool SettingsSerializer::load(Settings &settings)
     reader.get("version",        settings.version);
     reader.get("auto_pause_en",  settings.autoPauseEn);
     reader.get("phone_notif_en", settings.phoneNotifEn);
-    settings.calibTraceEn = false;  // deterministic default for legacy files
-    reader.get("calib_trace_en", settings.calibTraceEn);
-    uint8_t distId = static_cast<uint8_t>(Settings::Alerts::Distance::ID_DEFAULT);
-    uint8_t timeId = static_cast<uint8_t>(Settings::Alerts::Time::ID_OFF);
-    reader.get("alert_distance_id", distId);
-    reader.get("alert_time_id",     timeId);
-    settings.alertDistanceId = distId < Settings::Alerts::Distance::ID_COUNT
-        ? static_cast<Settings::Alerts::Distance::Id>(distId)
-        : Settings::Alerts::Distance::ID_DEFAULT;
-    settings.alertTimeId = timeId < Settings::Alerts::Time::ID_COUNT
-        ? static_cast<Settings::Alerts::Time::Id>(timeId)
-        : Settings::Alerts::Time::ID_OFF;
 
-    // Distance and time auto-laps are mutually exclusive. Normalize a legacy
-    // file that has both enabled by keeping distance (which getLapDivSource()
-    // prefers) and clearing time, matching the settings-menu invariant.
-    if (settings.alertDistanceId != Settings::Alerts::Distance::ID_OFF) {
-        settings.alertTimeId = Settings::Alerts::Time::ID_OFF;
-    }
+    uint8_t mode = static_cast<uint8_t>(settings.mode);
+    reader.get("mode", mode);
+    settings.mode = mode <= static_cast<uint8_t>(Settings::Mode::Outdoor)
+        ? static_cast<Settings::Mode>(mode)
+        : Settings::Mode::Indoor;
+
+    reader.get("lap_length_m", settings.lapLengthM);
+    reader.get("lane",         settings.lane);
+    reader.get("lane_width_m", settings.laneWidthM);
+    settings.lapLengthM = std::clamp(settings.lapLengthM, Settings::Lap::kLengthMinM, Settings::Lap::kLengthMaxM);
+    settings.lane       = std::clamp(settings.lane, Settings::Lap::kLaneMin, Settings::Lap::kLaneMax);
+    settings.laneWidthM = std::clamp(settings.laneWidthM, Settings::Lap::kLaneWidthMinM, Settings::Lap::kLaneWidthMaxM);
 
     reader.get("intervals.repeats_num",   settings.intervals.repeatsNum);
     reader.get("intervals.run_time",      settings.intervals.runTime);

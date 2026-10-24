@@ -26,22 +26,11 @@ void TrackSummaryScreen::build()
     mButtons->set(Widgets::Buttons::NONE, Widgets::Buttons::NONE,
                   Widgets::Buttons::NONE, Widgets::Buttons::NONE);
     mIndicator = std::make_unique<Widgets::ScrollIndicator>(mRoot, Widgets::ScrollIndicator::kSmall);
-    mIndicator->setCount(3);
+    mIndicator->setCount(2);
 
     buildFaceLaps();
     buildFaceHeartRate();
     buildFaceOverview();
-    buildFaceMap();
-}
-
-void TrackSummaryScreen::buildFaceMap()
-{
-    lv_obj_t* f = mFaces[FACE_MAP] = Theme::container(mRoot, 0, 0, 240, 240);
-    mMapUnits    = Theme::label(f, F::Medium18, Strings::kKm, 178, 73, 45, LV_TEXT_ALIGN_LEFT);
-    mMapDistance = Theme::label(f, F::SemiBold40, Strings::kNoValue, 60, 51, 120);
-    Theme::image(f, &img_runningman_30x30, 33, 62);
-    mMap = std::make_unique<Widgets::Map>(f, 45, 90);
-    mTitles[FACE_MAP] = std::make_unique<Widgets::Title>(f, "MAP");
 }
 
 void TrackSummaryScreen::buildFaceOverview()
@@ -113,7 +102,7 @@ void TrackSummaryScreen::onShow()
         mButtons->set(Widgets::Buttons::NONE, Widgets::Buttons::NONE,
                       Widgets::Buttons::AMBER, Widgets::Buttons::NONE);
     }
-    showFace(FACE_MAP);
+    showFace(FACE_OVERVIEW);
 }
 
 void TrackSummaryScreen::setSummary(const ActivitySummary& s)
@@ -121,9 +110,7 @@ void TrackSummaryScreen::setSummary(const ActivitySummary& s)
     char buf[24];
     const float dist = Fmt::distUnits(s.distance, mIsImperial);
     Fmt::distanceTotal(buf, sizeof(buf), dist);
-    lv_label_set_text(mMapDistance, buf);
     lv_label_set_text(mOverviewDistance, buf);
-    lv_label_set_text(mMapUnits, Fmt::units(mIsImperial));
     lv_label_set_text(mOverviewUnits, Fmt::units(mIsImperial));
 
     Fmt::pace(buf, sizeof(buf), Fmt::paceUnits(s.paceAvg, mIsImperial));
@@ -135,8 +122,6 @@ void TrackSummaryScreen::setSummary(const ActivitySummary& s)
     lv_label_set_text(mMaxHr, buf);
     Fmt::heartRate(buf, sizeof(buf), s.hrAvg);
     lv_label_set_text(mAvgHr, buf);
-
-    mMap->setMap(s.map);
 
     mLaps = &s.laps;
     lv_label_set_text_fmt(mLapsCount, "%lu LAPS", static_cast<unsigned long>(s.laps.size()));
@@ -151,7 +136,7 @@ void TrackSummaryScreen::setSummary(const ActivitySummary& s)
 
     mLapPage  = 0;
     mLapPages = s.laps.empty() ? 0 : static_cast<uint8_t>((s.laps.size() + kLapPageSize - 1) / kLapPageSize);
-    mIndicator->setCount(static_cast<uint16_t>(3 + mLapPages));
+    mIndicator->setCount(static_cast<uint16_t>(2 + mLapPages));
     fillLapRows();
 }
 
@@ -184,7 +169,7 @@ void TrackSummaryScreen::fillLapRows()
 void TrackSummaryScreen::showFace(uint8_t face)
 {
     mFace = face;
-    for (uint8_t i = 0; i < 4; ++i) {
+    for (uint8_t i = 0; i < kFaceCount; ++i) {
         if (i == face) {
             lv_obj_remove_flag(mFaces[i], LV_OBJ_FLAG_HIDDEN);
         } else {
@@ -225,7 +210,7 @@ void TrackSummaryScreen::onKey(uint8_t code)
                 } else {
                     showFace(mFace - 1);
                 }
-            } else if (mFace > FACE_MAP) {
+            } else if (mFace > FACE_OVERVIEW) {
                 showFace(mFace - 1);
             }
             break;

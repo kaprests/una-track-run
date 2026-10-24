@@ -21,9 +21,6 @@
 #include "gui/screens/MenuIntervalsMetricScreen.hpp"
 #include "gui/screens/IntervalsPickerScreen.hpp"
 #include "gui/screens/MenuSettingsScreen.hpp"
-#include "gui/screens/MenuAlertsScreen.hpp"
-#include "gui/screens/MenuAlertValueScreen.hpp"
-#include "gui/screens/AlertSavedScreen.hpp"
 #include "gui/screens/TrackStartConfirmScreen.hpp"
 #include "gui/screens/TrackIntervalsCountdownScreen.hpp"
 #include "gui/screens/TrackScreen.hpp"
@@ -117,7 +114,6 @@ Screen* ScreenManager::create(ScreenId id)
     Model& m = *mModel;
     using Phase  = MenuIntervalsMetricScreen::Phase;
     using Metric = IntervalsPickerScreen::Metric;
-    using Alert  = MenuAlertValueScreen::Kind;
 
     switch (id) {
         case ScreenId::Main:                      return new MainScreen(m);
@@ -132,11 +128,6 @@ Screen* ScreenManager::create(ScreenId id)
         case ScreenId::MenuIntervalsRestDistance: return new IntervalsPickerScreen(m, Phase::Rest, Metric::Distance);
 
         case ScreenId::MenuSettings:              return new MenuSettingsScreen(m);
-        case ScreenId::MenuAlerts:                return new MenuAlertsScreen(m);
-        case ScreenId::MenuAlertDistance:         return new MenuAlertValueScreen(m, Alert::Distance);
-        case ScreenId::MenuAlertTime:             return new MenuAlertValueScreen(m, Alert::Time);
-        case ScreenId::MenuAlertDistanceSaved:    return new AlertSavedScreen(m, Alert::Distance);
-        case ScreenId::MenuAlertTimeSaved:        return new AlertSavedScreen(m, Alert::Time);
 
         case ScreenId::TrackStartConfirm:         return new TrackStartConfirmScreen(m);
         case ScreenId::TrackIntervalsCountdown:   return new TrackIntervalsCountdownScreen(m);

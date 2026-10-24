@@ -108,18 +108,8 @@ struct Root {
 
     struct Settings {
         enum Id {
-            ID_ALERTS = 0, ID_PHONE_NOTIF,
-            ID_COUNT, ID_DEFAULT = ID_ALERTS
-        };
-
-        struct Alerts {
-            enum Id {
-                ID_DISTANCE = 0, ID_TIME,
-                ID_COUNT, ID_DEFAULT = ID_DISTANCE
-            };
-
-            using Distance = ::Settings::Alerts::Distance;
-            using Time     = ::Settings::Alerts::Time;
+            ID_PHONE_NOTIF = 0,
+            ID_COUNT, ID_DEFAULT = ID_PHONE_NOTIF
         };
     };
 };
@@ -169,17 +159,9 @@ struct Nav : Position<Root> {
         void reset()         { Position<Root::Intervals>::reset(); resetChildren(); }
     };
 
-    // Settings node -- alerts picker is a child
-    struct SettingsNav : Position<Root::Settings> {
-        Position<Root::Settings::Alerts> alerts;
-
-        void resetChildren() { alerts.reset(); }
-        void reset()         { Position<Root::Settings>::reset(); resetChildren(); }
-    };
-
     TrackViewNav  track;      // TrackView page + nested TrackAction
     IntervalsNav  intervals;  // Intervals menu + nested run/rest metrics
-    SettingsNav   settings;   // Settings menu + nested alerts
+    Position<Root::Settings> settings;
 
     void resetChildren() { track.reset(); intervals.reset(); settings.reset(); }
     void reset()         { Position<Root>::reset(); resetChildren(); }

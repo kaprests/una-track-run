@@ -45,7 +45,6 @@ private:
     float mAvgPaceConv  = 0.0f;
     float mDistanceConv = 0.0f;
     float mAvgHr        = 0.0f;
-    float mElevationConv = 0.0f;
 
     std::unique_ptr<WheelMenu>               mMenu;
     std::unique_ptr<Widgets::Buttons>        mButtons;

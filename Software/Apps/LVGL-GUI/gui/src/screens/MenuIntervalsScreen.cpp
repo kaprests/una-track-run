@@ -34,7 +34,7 @@ void MenuIntervalsScreen::build()
     mButtons->set(Widgets::Buttons::NONE, Widgets::Buttons::NONE,
                   Widgets::Buttons::AMBER, Widgets::Buttons::WHITE);
     mTitle     = std::make_unique<Widgets::Title>(mRoot, "INTERVALS");
-    mSensorRow = std::make_unique<Widgets::SensorStatusRow>(mRoot, 0, 52, 240, 24);
+    mSensorRow = std::make_unique<Widgets::SensorStatusRow>(mRoot, 0, 52, 240, 24, mModel.usesGps());
 }
 
 void MenuIntervalsScreen::onShow()
@@ -111,7 +111,7 @@ void MenuIntervalsScreen::saveToggle(uint16_t index, bool state)
 void MenuIntervalsScreen::startIntervals()
 {
     // With a fix, straight to the countdown; without one, via the warning.
-    if (mModel.hasGpsFix()) {
+    if (mModel.canStart()) {
         ScreenManager::instance().goTo(ScreenId::TrackIntervalsCountdown);
     } else {
         mModel.setPendingIntervalsMode(true);

@@ -47,7 +47,7 @@ void TrackActionScreen::onShow()
     onTrackData(mModel.getTrackData());
     mModel.resetIdleTimer();
     mMenu->select(mModel.menu().track.action.get());
-    mCarousel->setCount(4);
+    mCarousel->setCount(3);
     mModel.trackPause();
 }
 
@@ -95,7 +95,6 @@ void TrackActionScreen::onTrackData(const Track::Data& data)
     mAvgPaceConv   = Fmt::paceUnits(data.avgPace, mIsImperial);
     mDistanceConv  = Fmt::distUnits(data.distance, mIsImperial);
     mAvgHr         = data.avgHR;
-    mElevationConv = mIsImperial ? SDK::Utils::metersToFeet(data.elevation) : data.elevation;
     mCarousel->refresh();
 }
 
@@ -119,10 +118,6 @@ void TrackActionScreen::updateCarousel(int16_t index)
         case 2:
             mCarousel->setTitle("AVG. HR");
             Fmt::heartRate(buf, sizeof(buf), mAvgHr);
-            break;
-        case 3:
-            mCarousel->setTitle("ELEVATION");
-            snprintf(buf, sizeof(buf), "%d", static_cast<int>(mElevationConv));
             break;
         default:
             return;

@@ -36,7 +36,6 @@ public:
         enum class Field : uint8_t {
             COORDS     = 1u << 0, // lat/long valid as a group
             SPEED      = 1u << 1,
-            ALTITUDE   = 1u << 2,
             HEART_RATE   = 1u << 3,
             BATTERY      = 1u << 4,
             CADENCE      = 1u << 5,
@@ -53,7 +52,6 @@ public:
         float       latitude       = 0.0f;  // degrees
         float       longitude      = 0.0f;  // degrees
         float       speed          = 0.0f;  // m/s
-        float       altitude       = 0.0f;  // m
         float       heartRate      = 0.0f;  // bpm (arbitrated)
         uint8_t     hrSource       = 0;     // HeartRateEx::Source (0=none,1=optical,2=external)
         uint8_t     hrOpticalBpm   = 0;     // raw wrist-optical (PPG) bpm (0 = none)
@@ -82,8 +80,6 @@ public:
         float       speedMax  = 0.0f;   // m/s
         float       hrAvg     = 0.0f;   // bpm
         float       hrMax     = 0.0f;   // bpm
-        float       ascent    = 0.0f;   // m
-        float       descent   = 0.0f;   // m
         // workout_step this lap belongs to (kMessageIndexInvalid = none)
         uint16_t    wktStepIndex = SDK::Fit::kMessageIndexInvalid;
     };
@@ -112,8 +108,6 @@ public:
         float       speedMax  = 0.0f;   // m/s
         float       hrAvg     = 0.0f;   // bpm
         float       hrMax     = 0.0f;   // bpm
-        float       ascent    = 0.0f;   // m
-        float       descent   = 0.0f;   // m
     };
 
     ActivityWriter(const SDK::Kernel& kernel, const char* pathToDir);

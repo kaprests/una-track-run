@@ -16,8 +16,6 @@
 #include <ctime>
 #include <vector>
 
-#include "SDK/TrackMap/TrackMapScreen.hpp"
-
 /**
  * @struct LapSummary
  * @brief Summary data for a single lap.
@@ -37,11 +35,9 @@ struct ActivitySummary {
     time_t time;        ///< Total track time in seconds
     float distance;     ///< Total track distance in m
     float speedAvg;     ///< Average speed in m/s
-    float elevation;    ///< Accumulated elevation gain (ascent) in m
     float paceAvg;      ///< Average pace in s/m
     float hrMax;        ///< Maximum Heart Rate in bpm
     float hrAvg;        ///< Average Heart Rate in bpm
-    SDK::TrackMapScreen map; ///< Track map
 
     std::vector<LapSummary> laps; ///< Per-lap summary data
 };

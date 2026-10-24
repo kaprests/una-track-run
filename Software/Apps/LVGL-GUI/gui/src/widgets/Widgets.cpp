@@ -20,8 +20,8 @@ namespace Widgets
 
 // --- SensorStatusRow ---------------------------------------------------------
 
-SensorStatusRow::SensorStatusRow(lv_obj_t* parent, int32_t x, int32_t y, int32_t w, int32_t h)
-    : SDK::LVGL::SensorStatusRow(parent, x, y, w, h, &img_sensorgpslight, &img_sensorhrlight)
+SensorStatusRow::SensorStatusRow(lv_obj_t* parent, int32_t x, int32_t y, int32_t w, int32_t h, bool showGps)
+    : SDK::LVGL::SensorStatusRow(parent, x, y, w, h, showGps ? &img_sensorgpslight : nullptr, &img_sensorhrlight)
 {
 }
 
@@ -255,46 +255,6 @@ void InfoCarousel::fire()
     if (mCb) {
         mCb(mUser, static_cast<int16_t>(mIndex));
     }
-}
-
-// --- Map -------------------------------------------------------------------
-
-Map::Map(lv_obj_t* parent, int32_t x, int32_t y)
-{
-    mRoot = Theme::container(parent, x, y, 150, 150);
-    mLine = lv_line_create(mRoot);
-    lv_obj_set_pos(mLine, 0, 0);
-    lv_obj_set_size(mLine, 150, 150);
-    lv_obj_set_style_line_width(mLine, 3, LV_PART_MAIN);
-    lv_obj_set_style_line_rounded(mLine, true, LV_PART_MAIN);
-    lv_obj_set_style_line_color(mLine, Theme::rgb(Color::YELLOW_DARK), LV_PART_MAIN);
-    mStart = Theme::dot(mRoot, 75, 75, 4, Color::CHARTREUSE);
-    mEnd   = Theme::dot(mRoot, 75, 75, 4, Color::RED);
-}
-
-void Map::setMap(const SDK::TrackMapScreen& map)
-{
-    if (map.points.empty()) {
-        return;
-    }
-    // Centre the route's bounding box in the 142 px area inside a 4 px inset,
-    // as the TouchGFX Map does. +1 keeps the 3 px stroke centred on the point.
-    const int32_t contentW = map.maxx - map.minx;
-    const int32_t contentH = map.maxy - map.miny;
-    const int32_t baseX = 4 + (142 - contentW) / 2 - map.minx;
-    const int32_t baseY = 4 + (142 - contentH) / 2 - map.miny;
-
-    mPoints.resize(map.points.size());
-    for (size_t i = 0; i < map.points.size(); ++i) {
-        mPoints[i].x = static_cast<lv_value_precise_t>(baseX + map.points[i].x + 1);
-        mPoints[i].y = static_cast<lv_value_precise_t>(baseY + map.points[i].y + 1);
-    }
-    lv_line_set_points(mLine, mPoints.data(), static_cast<uint32_t>(mPoints.size()));
-
-    const auto& first = map.points.front();
-    const auto& last  = map.points.back();
-    lv_obj_set_pos(mStart, baseX + first.x - 4, baseY + first.y - 4);
-    lv_obj_set_pos(mEnd,   baseX + last.x - 4,  baseY + last.y - 4);
 }
 
 // --- IntervalsTimer --------------------------------------------------------

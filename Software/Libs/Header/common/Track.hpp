@@ -114,9 +114,6 @@ struct Data {
     float avgLapSpeed  = 0.0f;
     float maxLapSpeed  = 0.0f;
 
-    // Elevation, m (current altitude from barometer)
-    float elevation    = 0.0f;
-
     bool intervalsMode = false; ///< true when the track was started in intervals mode
 
     // Interval training (populated only when intervalsMode == true)

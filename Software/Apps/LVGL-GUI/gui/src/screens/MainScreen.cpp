@@ -47,7 +47,7 @@ void MainScreen::build()
         [](void* ctx, uint16_t) { static_cast<MainScreen*>(ctx)->updateBackground(); }, this);
     mButtons   = std::make_unique<Widgets::Buttons>(mRoot);
     mTitle     = std::make_unique<Widgets::Title>(mRoot, Strings::kAppNameUc);
-    mSensorRow = std::make_unique<Widgets::SensorStatusRow>(mRoot, 0, 52, 240, 24);
+    mSensorRow = std::make_unique<Widgets::SensorStatusRow>(mRoot, 0, 52, 240, 24, mModel.usesGps());
 
     mButtons->set(Widgets::Buttons::NONE, Widgets::Buttons::NONE,
                   Widgets::Buttons::AMBER, Widgets::Buttons::WHITE);
@@ -83,7 +83,7 @@ void MainScreen::confirm()
 {
     switch (mMenu->selected()) {
         case Menu::ID_START:
-            if (mGpsFix) {
+            if (mModel.canStart()) {
                 mModel.trackStart(false);
                 ScreenManager::instance().goTo(ScreenId::Track);
             } else {
@@ -107,7 +107,7 @@ void MainScreen::confirm()
 void MainScreen::updateBackground()
 {
     // Start without a fix is greyed out and R1 hidden; everything else is live.
-    const bool startBlocked = mMenu->selected() == Menu::ID_START && !mGpsFix;
+    const bool startBlocked = mMenu->selected() == Menu::ID_START && !mModel.canStart();
     mMenu->setBackground(startBlocked ? Color::GRAY_DARK : Color::TEAL_DARK);
     mButtons->setR1(startBlocked ? Widgets::Buttons::NONE : Widgets::Buttons::AMBER);
 }
@@ -121,7 +121,6 @@ void MainScreen::onIdleTimeout()
 
 void MainScreen::onGpsFix(bool acquired)
 {
-    mGpsFix = acquired;
     mSensorRow->setGps(Widgets::SensorStatusRow::gpsState(acquired));
     updateBackground();
 }

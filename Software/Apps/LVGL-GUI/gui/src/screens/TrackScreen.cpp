@@ -120,7 +120,7 @@ void TrackScreen::buildFaceLap()
 void TrackScreen::buildFaceStatus()
 {
     lv_obj_t* f = mFaceStatus = Theme::container(mRoot, 0, 0, 240, 240);
-    mSensorRow = std::make_unique<Widgets::SensorStatusRow>(f, 0, 20, 240, 24);
+    mSensorRow = std::make_unique<Widgets::SensorStatusRow>(f, 0, 20, 240, 24, mModel.usesGps());
     Theme::hline(f, 35, 62, 170);
     // Digits and AM/PM are sized to their text and centred as a group in setTime().
     mDayTime = Theme::label(f, F::SemiBold60, "--:--", 0, kTimeY, LV_SIZE_CONTENT, LV_TEXT_ALIGN_LEFT);

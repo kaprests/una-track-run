@@ -104,9 +104,19 @@ void Model::saveSettings(const Settings& sett)
 }
 
 // GPS
+bool Model::usesGps() const
+{
+    return mSettings.mode == Settings::Mode::Outdoor;
+}
+
 bool Model::hasGpsFix() const
 {
     return mGpsFix;
+}
+
+bool Model::canStart() const
+{
+    return !usesGps() || mGpsFix;
 }
 
 uint8_t Model::getAccessoryState() const
