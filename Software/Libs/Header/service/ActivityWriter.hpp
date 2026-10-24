@@ -36,6 +36,7 @@ public:
         enum class Field : uint8_t {
             COORDS     = 1u << 0, // lat/long valid as a group
             SPEED      = 1u << 1,
+            DISTANCE   = 1u << 2,
             HEART_RATE   = 1u << 3,
             BATTERY      = 1u << 4,
             CADENCE      = 1u << 5,
@@ -52,6 +53,8 @@ public:
         float       latitude       = 0.0f;  // degrees
         float       longitude      = 0.0f;  // degrees
         float       speed          = 0.0f;  // m/s
+        float       distance       = 0.0f;  // m, cumulative
+        float       paceK          = 1.0f;  // correction applied to the cadence model
         float       heartRate      = 0.0f;  // bpm (arbitrated)
         uint8_t     hrSource       = 0;     // HeartRateEx::Source (0=none,1=optical,2=external)
         uint8_t     hrOpticalBpm   = 0;     // raw wrist-optical (PPG) bpm (0 = none)
@@ -80,6 +83,7 @@ public:
         float       speedMax  = 0.0f;   // m/s
         float       hrAvg     = 0.0f;   // bpm
         float       hrMax     = 0.0f;   // bpm
+        bool        anchored  = false;  // the lap's known length corrected the pace
         // workout_step this lap belongs to (kMessageIndexInvalid = none)
         uint16_t    wktStepIndex = SDK::Fit::kMessageIndexInvalid;
     };
@@ -108,6 +112,7 @@ public:
         float       speedMax  = 0.0f;   // m/s
         float       hrAvg     = 0.0f;   // bpm
         float       hrMax     = 0.0f;   // bpm
+        float       distanceModelM = 0.0f; // m, before correction
     };
 
     ActivityWriter(const SDK::Kernel& kernel, const char* pathToDir);
@@ -162,6 +167,9 @@ private:
         DF_HR_SOURCE       = 4,
         DF_HR_OPTICAL      = 5,
         DF_HR_EXTERNAL     = 6,
+        DF_PACE_K          = 7,   ///< record: correction factor applied to the model
+        DF_LAP_ANCHORED    = 8,   ///< lap: its length corrected the pace
+        DF_DISTANCE_MODEL  = 9,   ///< session: distance of the uncorrected model
     };
 
     /// Flush + marker-refresh cadence during recording (seconds of record time).

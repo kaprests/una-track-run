@@ -31,6 +31,7 @@ namespace {
         fit::field::Record::Cadence,
         fit::field::Record::FractionalCadence,
         fit::field::Record::StepLength,
+        fit::field::Record::Distance,
     };
 }  // namespace
 
@@ -88,6 +89,9 @@ void ActivityWriter::start(const AppInfo& info)
     writeFieldDescription(DF_HR_SOURCE, "hr_source", nullptr, fit::BaseType::UInt8);
     writeFieldDescription(DF_HR_OPTICAL, "hr_optical", "bpm", fit::BaseType::UInt8);
     writeFieldDescription(DF_HR_EXTERNAL, "hr_external", "bpm", fit::BaseType::UInt8);
+    writeFieldDescription(DF_PACE_K, "pace_k", nullptr, fit::BaseType::Float32);
+    writeFieldDescription(DF_LAP_ANCHORED, "lap_anchored", nullptr, fit::BaseType::UInt8);
+    writeFieldDescription(DF_DISTANCE_MODEL, "distance_model", "m", fit::BaseType::UInt32);
 
     // event
     mFit->defineMessage(L_EVENT, fit::mesgNum(fit::MesgNum::Event),
@@ -103,7 +107,8 @@ void ActivityWriter::start(const AppInfo& info)
          fit::field::Lap::TotalDistance, fit::field::Lap::MessageIndex,
          fit::field::Lap::AvgSpeed, fit::field::Lap::MaxSpeed,
          fit::field::Lap::AvgHeartRate, fit::field::Lap::MaxHeartRate,
-         fit::field::Lap::WktStepIndex});
+         fit::field::Lap::WktStepIndex},
+        {{DF_LAP_ANCHORED, 1, 0}});
     mFit->defineMessage(L_SESSION, fit::mesgNum(fit::MesgNum::Session),
         {fit::field::Session::Timestamp, fit::field::Session::StartTime,
          fit::field::Session::TotalElapsedTime, fit::field::Session::TotalTimerTime,
@@ -111,7 +116,8 @@ void ActivityWriter::start(const AppInfo& info)
          fit::field::Session::AvgSpeed, fit::field::Session::MaxSpeed,
          fit::field::Session::NumLaps, fit::field::Session::Sport,
          fit::field::Session::SubSport, fit::field::Session::AvgHeartRate,
-         fit::field::Session::MaxHeartRate});
+         fit::field::Session::MaxHeartRate},
+        {{DF_DISTANCE_MODEL, 4, 0}});
     mFit->defineMessage(L_ACTIVITY, fit::mesgNum(fit::MesgNum::Activity),
         {fit::field::Activity::Timestamp, fit::field::Activity::TotalTimerTime,
          fit::field::Activity::LocalTimestamp, fit::field::Activity::NumSessions});
@@ -131,43 +137,45 @@ void ActivityWriter::start(const AppInfo& info)
 
 void ActivityWriter::defineRecordMessages()
 {
-    const DevFieldDef hr3[] = {
+    const DevFieldDef devBase[] = {
+        {DF_PACE_K, 4, 0},
         {DF_HR_SOURCE, 1, 0}, {DF_HR_OPTICAL, 1, 0}, {DF_HR_EXTERNAL, 1, 0},
     };
-    const DevFieldDef batt5[] = {
+    const DevFieldDef devBattery[] = {
         {DF_BATTERY_LEVEL, 1, 0}, {DF_BATTERY_VOLTAGE, 2, 0},
+        {DF_PACE_K, 4, 0},
         {DF_HR_SOURCE, 1, 0}, {DF_HR_OPTICAL, 1, 0}, {DF_HR_EXTERNAL, 1, 0},
     };
 
-    // Plain record (HR/cadence only) + 3 HR developer fields.
+    // Plain record (HR/cadence only) + the developer fields.
     mFit->defineMessage(L_RECORD, fit::mesgNum(fit::MesgNum::Record),
         {fit::field::Record::Timestamp,
          kRecordCommonTail[0], kRecordCommonTail[1], kRecordCommonTail[2],
-         kRecordCommonTail[3], kRecordCommonTail[4]},
-        {hr3[0], hr3[1], hr3[2]});
+         kRecordCommonTail[3], kRecordCommonTail[4], kRecordCommonTail[5]},
+        {devBase[0], devBase[1], devBase[2], devBase[3]});
 
     // + GPS.
     mFit->defineMessage(L_RECORD_G, fit::mesgNum(fit::MesgNum::Record),
         {fit::field::Record::Timestamp,
          fit::field::Record::PositionLat, fit::field::Record::PositionLong,
          kRecordCommonTail[0], kRecordCommonTail[1], kRecordCommonTail[2],
-         kRecordCommonTail[3], kRecordCommonTail[4]},
-        {hr3[0], hr3[1], hr3[2]});
+         kRecordCommonTail[3], kRecordCommonTail[4], kRecordCommonTail[5]},
+        {devBase[0], devBase[1], devBase[2], devBase[3]});
 
-    // + battery (5 developer fields).
+    // + battery.
     mFit->defineMessage(L_RECORD_B, fit::mesgNum(fit::MesgNum::Record),
         {fit::field::Record::Timestamp,
          kRecordCommonTail[0], kRecordCommonTail[1], kRecordCommonTail[2],
-         kRecordCommonTail[3], kRecordCommonTail[4]},
-        {batt5[0], batt5[1], batt5[2], batt5[3], batt5[4]});
+         kRecordCommonTail[3], kRecordCommonTail[4], kRecordCommonTail[5]},
+        {devBattery[0], devBattery[1], devBattery[2], devBattery[3], devBattery[4], devBattery[5]});
 
     // + GPS + battery.
     mFit->defineMessage(L_RECORD_GB, fit::mesgNum(fit::MesgNum::Record),
         {fit::field::Record::Timestamp,
          fit::field::Record::PositionLat, fit::field::Record::PositionLong,
          kRecordCommonTail[0], kRecordCommonTail[1], kRecordCommonTail[2],
-         kRecordCommonTail[3], kRecordCommonTail[4]},
-        {batt5[0], batt5[1], batt5[2], batt5[3], batt5[4]});
+         kRecordCommonTail[3], kRecordCommonTail[4], kRecordCommonTail[5]},
+        {devBattery[0], devBattery[1], devBattery[2], devBattery[3], devBattery[4], devBattery[5]});
 }
 
 void ActivityWriter::writeFieldDescription(uint8_t devFieldNum, const char* name,
@@ -244,11 +252,16 @@ void ActivityWriter::addRecord(const RecordData& record)
               ? SDK::FitRecordCadence::encodeStepLengthM(record.stepLengthM)
               : static_cast<uint16_t>(fit::baseTypeInvalid(fit::BaseType::UInt16)));
 
+    // distance (100 * m, cumulative)
+    d.u32(record.has(RecordData::Field::DISTANCE)
+              ? static_cast<uint32_t>(record.distance * 100.0f)
+              : static_cast<uint32_t>(fit::baseTypeInvalid(fit::BaseType::UInt32)));
+
     // Developer fields, in definition order.
     if (batt) {
         d.u8(record.batteryLevel).u16(record.batteryVoltage);
     }
-    d.u8(record.hrSource).u8(record.hrOpticalBpm).u8(record.hrExternalBpm);
+    d.f32(record.paceK).u8(record.hrSource).u8(record.hrOpticalBpm).u8(record.hrExternalBpm);
 
     d.write();
 
@@ -281,6 +294,7 @@ void ActivityWriter::addLap(const LapData& lap)
         .u8(static_cast<uint8_t>(lap.hrAvg))
         .u8(static_cast<uint8_t>(lap.hrMax))
         .u16(lap.wktStepIndex)
+        .u8(lap.anchored ? 1 : 0)
         .write();
     mLapCounter++;
 
@@ -352,6 +366,7 @@ bool ActivityWriter::stop(const TrackData& track)
         .u8(static_cast<uint8_t>(fit::SubSport::Track))
         .u8(static_cast<uint8_t>(track.hrAvg))
         .u8(static_cast<uint8_t>(track.hrMax))
+        .u32(static_cast<uint32_t>(track.distanceModelM * 100.0f))
         .write() && ok;
 
     ok = mFit->data(L_ACTIVITY)

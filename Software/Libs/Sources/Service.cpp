@@ -678,6 +678,10 @@ ActivityWriter::RecordData Service::prepareRecordData()
     fitRecord.set(ActivityWriter::RecordData::Field::SPEED, mSpeedCounter.isValid());
     fitRecord.speed        = mSpeedCounter.getCurrent();
 
+    fitRecord.set(ActivityWriter::RecordData::Field::DISTANCE);
+    fitRecord.distance     = mDistanceCounter.getValueActive();
+    fitRecord.paceK        = usesGps() ? 1.0f : mCorrector.k();
+
     bool hasHeartRate = (mHrCounter.getCurrent() > 20 && mTrackData.hrTrustLevel >= 1 && mTrackData.hrTrustLevel <= 3);
     fitRecord.set(ActivityWriter::RecordData::Field::HEART_RATE, hasHeartRate);
     fitRecord.heartRate    = mHrCounter.getCurrent();
@@ -970,6 +974,7 @@ void Service::saveLap(std::optional<float> exactDistanceM)
 
     fitLap.hrAvg     = mHrCounter.getLapAverage();
     fitLap.hrMax     = mHrCounter.getLapMaximum();
+    fitLap.anchored  = exactDistanceM.has_value();
 
     // Link this lap to its workout_step (intervals only; left INVALID otherwise).
     if (mIntervalsMode && mIntervalsStepMap.valid) {
@@ -1062,6 +1067,7 @@ void Service::stopTrack(bool discard)
 
         fitTrack.hrAvg     = mHrCounter.getAverage();
         fitTrack.hrMax     = mHrCounter.getMaximum();
+        fitTrack.distanceModelM = usesGps() ? fitTrack.distance : mEstimator.distanceM();
 
         if (mActivityWriter.stop(fitTrack)) {
             notifyNewActivity();
