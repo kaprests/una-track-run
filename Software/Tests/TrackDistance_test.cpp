@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include "SDK/Metrics/MonotonicCounter.hpp"
 #include "TrackDistance.hpp"
 
 namespace {
@@ -137,4 +138,34 @@ TEST(TrackDistance, ReportsModelDistanceOfCurrentSegment)
     TrackDistance distance = trackWithLaps();
     distance.closeSegment(190.0f, 1.0f);
     EXPECT_FLOAT_EQ(distance.rawSegmentM(250.0f), 60.0f);
+}
+
+TEST(TrackDistance, SessionTotalEqualsSumOfLapsInTheCounter)
+{
+    SDK::Metric::MonotonicCounter<float> counter;
+    counter.init();
+    counter.add(0.0f);
+
+    TrackDistance distance = trackWithLaps();
+    float raw     = 0.0f;
+    float lapsSum = 0.0f;
+    const auto press = [&] {
+        distance.closeSegment(raw, 1.0f);
+        distance.beginSegment(TrackDistance::Segment{ kLapM, true });
+        counter.add(distance.total(raw, 1.0f));
+        lapsSum += counter.getLapValueActive();
+        counter.resetLap();
+    };
+
+    for (const float lapRaw : { 207.0f, 193.0f, 401.0f, 196.0f }) {
+        for (float step = 3.0f; step <= lapRaw; step += 3.0f) {
+            counter.add(distance.total(raw + step, 1.0f));
+        }
+        raw += lapRaw;
+        counter.add(distance.total(raw, 1.0f));
+        press();
+    }
+
+    EXPECT_FLOAT_EQ(counter.getValueActive(), 1000.0f);
+    EXPECT_FLOAT_EQ(lapsSum, 1000.0f);
 }

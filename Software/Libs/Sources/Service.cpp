@@ -816,6 +816,7 @@ void Service::startTrack(std::time_t utc)
     mTimeCounter.add(utc);
 
     mDistanceCounter.reset();
+    mDistanceCounter.add(0.0f);
     mSpeedCounter.reset();
     mSpeedSmoother.reset();
     mHrCounter.reset();

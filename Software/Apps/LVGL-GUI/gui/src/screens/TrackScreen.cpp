@@ -203,13 +203,11 @@ void TrackScreen::onKey(uint8_t code)
             ScreenManager::instance().goTo(ScreenId::TrackAction);
             break;
         case Btn::R2:
-            // In an intervals workout the lap button advances the phase, on any
-            // face; laps are phase-driven. A free run records a manual lap.
+            // The lap popup opens once the service confirms the lap (onLapChanged).
             if (mIntervalsMode) {
                 mModel.intervalsNextPhase();
             } else {
                 mModel.saveLap();
-                ScreenManager::instance().goTo(ScreenId::TrackLap);
             }
             break;
         default:

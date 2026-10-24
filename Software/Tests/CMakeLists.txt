@@ -14,5 +14,8 @@ add_executable(trackrun-host-tests
     TrackDistance_test.cpp
     ${LIBS}/Sources/SegmentCorrector.cpp
 )
-target_include_directories(trackrun-host-tests PRIVATE ${LIBS}/Header/service)
+target_include_directories(trackrun-host-tests PRIVATE
+    ${LIBS}/Header/service
+    ${CMAKE_CURRENT_LIST_DIR}/../../una-sdk/Libs/Header
+)
 target_link_libraries(trackrun-host-tests PRIVATE GTest::gtest_main)
