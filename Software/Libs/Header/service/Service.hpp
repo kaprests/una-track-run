@@ -40,6 +40,9 @@ private:
     static constexpr uint32_t skSamplePeriod         = 1000;
     static constexpr uint32_t skSampleLatency        = 1000;
 
+    static constexpr float    skPhaseEndWarningM         = 15.0f;
+    static constexpr uint32_t skPhaseEndPromptPeriodSec  = 10;
+
     static constexpr uint32_t skBatteryLogPeriodMs   = 5 * 60 * 1000;
     static constexpr float    skFusionSampleRateHz   = 100.0f;
 
@@ -158,6 +161,7 @@ private:
     bool        mIntervalsCompleted   = false; ///< Set after workout completed; blocks further phase processing
     std::time_t mPhaseStartActiveSec  = 0;     ///< mTimeCounter.getValueActive() at phase start
     float       mPhaseStartActiveDist = 0.0f;  ///< mDistanceCounter.getValueActive() at phase start
+    bool        mPhaseEndWarned       = false; ///< The approach warning of a distance phase was given
 
     /// Maps interval phases to workout_step message_index values for the FIT
     /// workout description (0xFFFF = no associated step).
@@ -217,6 +221,13 @@ private:
     void advanceIntervalsPhase(bool manual = false);
     void processIntervals();
     void onIntervalsPhaseChange(bool alert, bool manual);
+
+    /// Length the runner covered in the current phase, when the phase is a set distance run on a track.
+    std::optional<float> knownPhaseDistanceM() const;
+    /// Ends the phase as its own lap, anchoring the pace to the phase distance when it has one.
+    void closeIntervalsPhase();
+    /// A distance phase on a track ends on the runner's press: warn on approach, then prompt.
+    void alertPhaseDistance(float targetM, float doneM);
 
     /// Build the workout_step list from the intervals config, emit the workout /
     /// workout_step messages, and populate mIntervalsStepMap for lap referencing.

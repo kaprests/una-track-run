@@ -1280,6 +1280,7 @@ void Service::startIntervalsPhase(Track::IntervalsPhase phase)
 {
     mPhaseStartActiveSec  = mTimeCounter.getValueActive();
     mPhaseStartActiveDist = mDistanceCounter.getValueActive();
+    mPhaseEndWarned       = false;
 
     Track::IntervalsData& iv   = mTrackData.intervals;
     const Settings::Intervals& cfg = mSettings.intervals;
@@ -1376,13 +1377,55 @@ void Service::processIntervals()
             : cfg.restDistance;
         const float done = mDistanceCounter.getValueActive() - mPhaseStartActiveDist;
         iv.distRemaining = (done < target) ? (target - done) : 0.0f;
-        autoAdvance = (done >= target);
+        if (usesGps()) {
+            autoAdvance = (done >= target);
+        } else {
+            alertPhaseDistance(target, done);
+        }
         break;
     }
     }
 
     if (autoAdvance) {
         advanceIntervalsPhase();
+    }
+}
+
+std::optional<float> Service::knownPhaseDistanceM() const
+{
+    const Track::IntervalsData& iv = mTrackData.intervals;
+    if (usesGps() || iv.metric != Track::IntervalsMetric::DISTANCE) {
+        return std::nullopt;
+    }
+    return iv.phase == Track::IntervalsPhase::RUN ? mSettings.intervals.runDistance
+                                                  : mSettings.intervals.restDistance;
+}
+
+void Service::closeIntervalsPhase()
+{
+    const std::optional<float> known = knownPhaseDistanceM();
+    const bool anchored = !usesGps() && endSegment(known);
+    if (mLapNotEmpty) {
+        saveLap(anchored ? known : std::nullopt);
+    }
+}
+
+void Service::alertPhaseDistance(float targetM, float doneM)
+{
+    const float remainingM = targetM - doneM;
+
+    if (remainingM > skPhaseEndWarningM) {
+        return;
+    }
+    if (remainingM > 0.0f) {
+        if (!mPhaseEndWarned) {
+            mPhaseEndWarned = true;
+            playVibroPattern(SDK::Message::RequestVibroPlay::Effect::STRONG_CLICK_100);
+        }
+    } else if (mTimeCounter.getValueActive() % skPhaseEndPromptPeriodSec == 0) {
+        backlightOn();
+        playVibroPattern(SDK::Message::RequestVibroPlay::Effect::SHORT_DOUBLE_CLICK_STRONG_1_100);
+        playBuzzerPattern(150, 2);
     }
 }
 
@@ -1446,9 +1489,7 @@ void Service::advanceIntervalsPhase(bool manual)
         // user can record additional manual laps and end it themselves. Close the
         // final phase as a lap, then drop out of intervals mode so the track
         // screen reverts to normal faces and R2 records a lap (not a phase advance).
-        if (mLapNotEmpty) {
-            saveLap();
-        }
+        closeIntervalsPhase();
         mIntervalsCompleted = true;
         mIntervalsMode = false;
         mTrackData.intervalsMode = false;
@@ -1462,9 +1503,7 @@ void Service::advanceIntervalsPhase(bool manual)
 
     // Record the phase that just finished as its own lap before the next one
     // begins. The final phase is captured by stopTrack() when the workout ends.
-    if (mLapNotEmpty) {
-        saveLap();
-    }
+    closeIntervalsPhase();
 
     startIntervalsPhase(nextPhase);
 
