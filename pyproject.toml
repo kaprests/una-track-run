@@ -1,0 +1,16 @@
+[project]
+name = "una-app"
+version = "0.1.0"
+description = "UNA Watch app"
+requires-python = ">=3.12,<3.13"
+# pyelftools, Pillow: una-sdk/Utilities/Scripts/app_packer/requirements.txt
+# pypng, lz4: LVGL image conversion (mise run assets)
+dependencies = [
+    "pyelftools>=0.29",
+    "Pillow>=9.0.0",
+    "pypng",
+    "lz4",
+]
+
+[tool.uv]
+package = false

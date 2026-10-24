@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+#MISE description="Scaffold the app from an SDK LVGL example (run once)"
+#USAGE arg "<name>" help="New app name, e.g. MyApp"
+#USAGE flag "--from <path>" required=#true help="LVGL example dir, e.g. una-sdk/Examples/Apps/RunLVGL"
+#
+# LVGL apps only (TouchGFX needs the Windows-only Designer).
+# Automates "Creating New Apps" -> "Full Rename and Reorganization":
+# https://www.developers.unawatch.com/latest/sdk-setup.html#creating-new-apps
+# LVGL layout: https://www.developers.unawatch.com/latest/Tutorials/RunLVGL/ARCHITECTURE.html
+set -euo pipefail
+
+name="$usage_name"
+src="${usage_from%/}"
+apps="$src/Software/Apps"
+
+[ -e Software ] && { echo "Software/ already exists; app is already scaffolded." >&2; exit 1; }
+[ -d "$apps/LVGL-GUI" ] || { echo "No $apps/LVGL-GUI: only LVGL examples are supported." >&2; exit 1; }
+cmake_dir=$(grep -l 'LVGL-GUI' "$apps"/*-CMake/CMakeLists.txt | xargs dirname)
+[ "$(echo "$cmake_dir" | wc -l)" = 1 ] || { echo "Expected one LVGL *-CMake dir in $apps." >&2; exit 1; }
+from=$(basename "$cmake_dir" -CMake)
+
+# 1. Copy CMake project, libs, GUI and icons
+mkdir -p Software/Apps Output
+cp -r "$cmake_dir" "Software/Apps/$name-CMake"
+cp -r "$src/Software/Libs" Software/Libs
+cp -r "$apps/LVGL-GUI" Software/Apps/LVGL-GUI
+cp -r "$src/Resources" Resources
+rm -rf "Software/Apps/$name-CMake/build" Software/Apps/LVGL-GUI/simulator/build
+
+# 2. Customize CMakeLists.txt
+app_id=$(python3 -c "import hashlib,sys; print(hashlib.md5(sys.argv[1].encode()).hexdigest().upper()[:16])" "$name")
+sed -i -E \
+  -e "s/^set\(APP_NAME .*/set(APP_NAME \"$name\")/" \
+  -e "s/^set\(APP_USER_NAME .*/set(APP_USER_NAME \"$name\")/" \
+  -e "s/^set\(APP_FILE_NAME .*/set(APP_FILE_NAME \"$name\")/" \
+  -e "s|^set\(OUTPUT_PATH .*|set(OUTPUT_PATH \"\${CMAKE_CURRENT_SOURCE_DIR}/../../../Output\")|" \
+  "Software/Apps/$name-CMake/CMakeLists.txt"
+
+# Simulator target, asset script (it locates the SDK by relative path)
+sim=Software/Apps/LVGL-GUI/simulator
+sed -i -E -e "s/${from}Simulator/${name}Simulator/g" "$sim/CMakeLists.txt"
+rm -f "$sim/linux-check.sh"
+
+# The App ID lives in Output/app-manifest.json only; both CMake builds read it
+# from there. Fill in the rest of the manifest before "mise run package".
+[ -f Output/app-manifest.json ] || printf '{\n  "id": "%s",\n  "stravaExport": false\n}\n' "$app_id" > Output/app-manifest.json
+manifest_id() {
+  printf '%s\n' '# The App ID lives in the manifest only.' \
+    "set(APP_MANIFEST_FILE \"$1/app-manifest.json\")" \
+    'set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${APP_MANIFEST_FILE}")' \
+    'file(READ "${APP_MANIFEST_FILE}" APP_MANIFEST)' \
+    'string(JSON APP_ID GET "${APP_MANIFEST}" id)'
+}
+fw="Software/Apps/$name-CMake/CMakeLists.txt"
+sed -i '/^set(APP_ID /d' "$fw"
+manifest_id '${OUTPUT_PATH}' > "$fw.snippet"
+sed -i -e "/^set(GUI_PATH /r $fw.snippet" "$fw"
+manifest_id '${CMAKE_CURRENT_SOURCE_DIR}/../../../../Output' > "$sim/CMakeLists.snippet"
+sed -i -E -e 's/APP_ID="[0-9A-F]+"/APP_ID="${APP_ID}"/' \
+  -e "/^include\(.*lvgl-gui\.cmake\)/r $sim/CMakeLists.snippet" "$sim/CMakeLists.txt"
+rm -f "$fw.snippet" "$sim/CMakeLists.snippet"
+gen=Software/Apps/LVGL-GUI/assets/gen_assets.py
+[ -f "$gen" ] && sed -i -E 's|^SDK_ROOT = .*|SDK_ROOT = os.environ["UNA_SDK"]|' "$gen"
+
+sed -i -E "s/^app = .*/app = \"$name\"/" mise.toml
+echo "Created $name (APP_ID $app_id) from $src."
+example=$(basename "$src")
+echo "Review the remaining mentions of '$example' (display strings, window title, comments):"
+grep -rnI -i -e "$example" -e "$from" Software --exclude-dir=fonts --exclude-dir=images || true
+echo "Next: mise run build && mise run sim"
