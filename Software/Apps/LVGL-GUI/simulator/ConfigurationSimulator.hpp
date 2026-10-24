@@ -13,8 +13,8 @@
 
 #include <iostream>
 
-// GPS sensor: the runner circles a stadium track at a speed between MIN and MAX.
-#define GSP_SIM_ENABLE               1  // 0 - Disable
+// GPS sensor: unused in indoor mode.
+#define GSP_SIM_ENABLE               0  // 1 - Enable
 #define GSP_SIM_SPEED_MIN            15 // km/h
 #define GPS_SIM_SPEED_BASE           20 // km/h
 #define GPS_SIM_SPEED_MAX            25 // km/h
@@ -26,8 +26,8 @@
 #define HEAT_RATE_SIM_MAX_HR        180 // Max - 255
 #define HEAT_RATE_SIM_TYPE_TRAINING 2   // 0 - Cycling, 1 - Hiking, 2 - Running
 
-// Pressure sensor
-#define PRESSURE_SIM_ENABLE       1 // 0 - Disable
+// Pressure sensor: unused, but the simulator reads the value unconditionally.
+#define PRESSURE_SIM_ENABLE       0 // 1 - Enable
 #define PRESSURE_SIM_PRESS_VALLUE 1020.2
 
 // Battery level sensor
@@ -42,5 +42,8 @@
 // IMU step counter
 #define IMU_STEP_COUNTER_SIM_ENABLE         1 // 0 - Disable
 #define IMU_STEP_COUNTER_SIM_STRIDE_LENGTH  1 // metres per step (running 1.0-1.4 m)
+
+// Running cadence: a constant 170 steps/min
+#define IMU_RUNNING_CADENCE_SIM_ENABLE      1 // 0 - Disable
 
 #endif /* CONFIG_SIMULATOR_HPP */

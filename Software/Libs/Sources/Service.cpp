@@ -70,6 +70,8 @@ Service::Service(SDK::Kernel &kernel)
         , mSensorWristMotion(SDK::Sensor::Type::WRIST_MOTION)
         , mSensorFusion(SDK::Sensor::Type::FUSION_RAW, 1000.0f / skFusionSampleRateHz, 100)
         , mSensorRunningCadence(SDK::Sensor::Type::RUNNING_CADENCE, skSamplePeriod, skSampleLatency)
+        , mModel(mKernel.fs)
+        , mEstimator(mModel)
         , mTimeTracker(kernel.sys)
         , mBatterySoc(kernel.sys)
         , mBatteryVoltage(kernel.sys)
@@ -280,7 +282,7 @@ void Service::connectSensors()
     // session. Already-connected sensors are skipped, so there is no churn.
     if (!mSensorBatteryLevel.isConnected())   { mSensorBatteryLevel.connect(); }
     if (!mSensorBatteryMetrics.isConnected()) { mSensorBatteryMetrics.connect(); }
-    if (mSettings.mode == Settings::Mode::Outdoor) {
+    if (usesGps()) {
         if (!mSensorGpsSpeed.isConnected())    { mSensorGpsSpeed.connect(); }
         if (!mSensorGpsDistance.isConnected()) { mSensorGpsDistance.connect(); }
     }
@@ -428,7 +430,7 @@ void Service::onStartGUI()
     setCapabilities();
     requestAccessoryPrepare();   // pre-warm external HR while on the pre-activity screen
 
-    if (mSettings.mode == Settings::Mode::Outdoor) {
+    if (usesGps()) {
         // GPS stays wanted from the pre-activity screen until the activity ends
         // (cleared in disconnect()), so the run() loop keeps it connected during the
         // activity but never re-wakes the GNSS on the post-activity summary screen.
@@ -670,15 +672,19 @@ ActivityWriter::RecordData Service::prepareRecordData()
     fitRecord.set(ActivityWriter::RecordData::Field::CADENCE, mRunningCadence.cadenceValid);
     fitRecord.cadenceSpm = mRunningCadence.cadenceSpm;
 
-    // Implied step length is derived SDK-side from GPS speed + cadence (the
-    // kernel no longer emits it). Gated to 0.15-2.50 m, preserving the prior
-    // record.step_length values.
-    const SDK::Calibration::StrideMath::StepLength stepLen =
-        SDK::Calibration::StrideMath::impliedStepLengthM(
-            mGpsSpeedMs, mGpsSpeedValid && !mGpsDeadReckoning,
-            mRunningCadence.cadenceSpm, mRunningCadence.cadenceValid);
-    fitRecord.set(ActivityWriter::RecordData::Field::STEP_LENGTH, stepLen.valid);
-    fitRecord.stepLengthM = stepLen.meters;
+    // Single-step distance: from the stride model indoors, implied by GPS speed
+    // and cadence outdoors.
+    if (usesGps()) {
+        const SDK::Calibration::StrideMath::StepLength stepLen =
+            SDK::Calibration::StrideMath::impliedStepLengthM(
+                mGpsSpeedMs, mGpsSpeedValid && !mGpsDeadReckoning,
+                mRunningCadence.cadenceSpm, mRunningCadence.cadenceValid);
+        fitRecord.set(ActivityWriter::RecordData::Field::STEP_LENGTH, stepLen.valid);
+        fitRecord.stepLengthM = stepLen.meters;
+    } else {
+        fitRecord.set(ActivityWriter::RecordData::Field::STEP_LENGTH, mRunningCadence.cadenceValid);
+        fitRecord.stepLengthM = mModel.treadmillStrideLengthM(mRunningCadence.cadenceSpm) / 2.0f;
+    }
 
     return fitRecord;
 }
@@ -693,6 +699,10 @@ void Service::sendInitialInfoToGui()
         if (msg.send(100) && msg.ok()) {
             mIsImperial = msg->imperialUnits;
             mTimeFormat12h = msg->timeFormat;
+
+            if (msg->heightCm > 0) {
+                mHeightM = static_cast<float>(msg->heightCm) / 100.0f;
+            }
 
             if (msg->heartRateCount > CustomMessage::kHrThresholdsCount) {
                 msg->heartRateCount = CustomMessage::kHrThresholdsCount;
@@ -745,6 +755,10 @@ void Service::startTrack(std::time_t utc)
     mGpsSpeedValid    = false;
     mGpsSpeedFresh    = false;
     mGpsDeadReckoning = false;
+
+    mModel.startSession(mHeightM);
+    mEstimator.startSession();
+    mLastTickUtc = 0;
 
     mSessionNotEmpty = false;
     mLapNotEmpty = false;
@@ -801,6 +815,16 @@ void Service::processTrack()
     // (processTrack) so it never re-powers sensors after the track ends.
     connectSensors();
 
+    if (!usesGps() && mTrackState == Track::State::ACTIVE) {
+        const std::time_t nowUtc = mTimeCounter.getCurrent();
+        const float dt = (mLastTickUtc == 0) ? 1.0f : static_cast<float>(nowUtc - mLastTickUtc);
+        mLastTickUtc = nowUtc;
+
+        mEstimator.tick(mRunningCadence.cadenceSpm, mRunningCadence.cadenceValid, dt);
+        mDistanceCounter.add(mEstimator.distanceM());
+        mSpeedCounter.add(mEstimator.speedMps());
+    }
+
     // Time, s
     mTrackData.totalTime = mTimeCounter.getValueActive();
     mTrackData.lapTime = mTimeCounter.getLapValueActive();
@@ -821,11 +845,17 @@ void Service::processTrack()
     // pause. That is a deliberate change: VariableCounter::add() latches its
     // current value before its own pause check, so the old readout went on
     // tracking the raw speed of a standing runner while the activity was paused.
-    if (mTrackState == Track::State::ACTIVE) {
-        mSpeedSmoother.tick(mGpsSpeedMs, mGpsSpeedValid && mGpsSpeedFresh);
-        mGpsSpeedFresh = false;
+    if (usesGps()) {
+        if (mTrackState == Track::State::ACTIVE) {
+            mSpeedSmoother.tick(mGpsSpeedMs, mGpsSpeedValid && mGpsSpeedFresh);
+            mGpsSpeedFresh = false;
+        }
+        mTrackData.speed = mSpeedSmoother.getSpeed();
+        mTrackData.pace  = mSpeedSmoother.getPace();
+    } else {
+        mTrackData.speed = mSpeedCounter.getCurrent();
+        mTrackData.pace  = getPace(mTrackData.speed, mSpeedCounter.getMinValid());
     }
-    mTrackData.speed = mSpeedSmoother.getSpeed();
 
     mTrackData.avgSpeed    = speedFromTotals(mTrackData.distance, mTrackData.totalTime);
     mTrackData.maxSpeed    = mSpeedCounter.getMaximum();
@@ -835,7 +865,6 @@ void Service::processTrack()
 
     // Pace, s/m
     const float kMinSpeed = mSpeedCounter.getMinValid();
-    mTrackData.pace = mSpeedSmoother.getPace();
     mTrackData.avgPace = getPace(mTrackData.avgSpeed, kMinSpeed);
     mTrackData.lapPace = getPace(mTrackData.avgLapSpeed, kMinSpeed);
 
@@ -1031,6 +1060,7 @@ void Service::pauseTrack(bool pause)
         mTimeCounter.pause();
         mDistanceCounter.pause();
         mSpeedCounter.pause();
+        mEstimator.pause();
         mHrCounter.pause();
 
         mActivityWriter.pause(mTimeCounter.getCurrent());
@@ -1045,6 +1075,8 @@ void Service::pauseTrack(bool pause)
         mTimeCounter.resume();
         mDistanceCounter.resume();
         mSpeedCounter.resume();
+        mEstimator.resume();
+        mLastTickUtc = 0;
         // Drop the pre-pause window: those samples describe the effort before
         // the break, so blending them into the resumed readout would be wrong.
         mSpeedSmoother.reset();

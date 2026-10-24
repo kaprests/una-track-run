@@ -11,6 +11,8 @@
 #include "SDK/Metrics/VariableCounter.hpp"
 #include "SDK/Metrics/SpeedSmoother.hpp"
 #include "SDK/Metrics/ThrottledSample.hpp"
+#include "SDK/Calibration/CadenceStrideModel.hpp"
+#include "SDK/Calibration/TreadmillSpeedEstimator.hpp"
 
 #include "SettingsSerializer.hpp"
 #include "ActivitySummarySerializer.hpp"
@@ -75,6 +77,14 @@ private:
         float cadenceSpm      = 0.0f;
         bool  cadenceValid    = false;
     } mRunningCadence{};
+
+    // -- Cadence pace (indoor mode) -------------------------------------------
+
+    // mModel must be declared before mEstimator: the estimator holds a reference to it.
+    SDK::Calibration::CadenceStrideModel      mModel;
+    SDK::Calibration::TreadmillSpeedEstimator mEstimator;
+    float                                     mHeightM     = 1.70f;
+    std::time_t                               mLastTickUtc = 0;
 
     // -- GPS speed (outdoor mode) ---------------------------------------------
 
@@ -186,6 +196,7 @@ private:
     void pauseTrack(bool pause);
     void buildPartialSummary();
     ActivityWriter::RecordData prepareRecordData();
+    bool usesGps() const { return mSettings.mode == Settings::Mode::Outdoor; }
 
     // -- Interval training ----------------------------------------------------
 
