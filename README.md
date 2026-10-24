@@ -1,7 +1,21 @@
-# UNA Watch App
+# TrackRun
 
-A template for starting a new UNA Watch app,
-including a mise-based dev env closely matching the setup from
+Live pace and distance for indoor track runs on the UNA Watch, where there is no GPS.
+
+Pace is cadence times a stride length from the personal model the Running app builds
+outdoors (`SharedData/stride.json`, read only). Every lap, or distance interval, of known
+length corrects the model, so the pace follows the shoes, the fatigue and the bends of the day.
+The correction is kept per track (lap length and lane) in the app's own `track_calib.json`.
+
+- Lap length, lane and lane width are set in Settings. Lane 1 is the inner lane.
+- R2 ends a lap. In an interval workout it ends the phase, and a distance phase is
+  measured against its set distance.
+- The activity is saved as a running/track FIT file with the correction as developer fields
+  (`pace_k`, `lap_anchored`, `distance_model`).
+
+See `idea.md` for the idea and its open questions.
+
+Built on a mise-based dev env closely matching the setup from
 UNA SDK docs: https://www.developers.unawatch.com/latest/sdk-setup.html
 
 ## Setup
@@ -32,22 +46,11 @@ Package declarations always merge with the global config.
 To install strictly this project's packages, hide the global config:
 `MISE_GLOBAL_CONFIG_FILE=$(mktemp --suffix .toml) mise bootstrap packages apply`.
 
-## New app (run once for a new project)
-
-Scaffold a new app from an **LVGL** example or tutorial in the SDK (TouchGFX is not supported)
-([docs](https://www.developers.unawatch.com/latest/sdk-setup.html#creating-new-apps)):
-
-```sh
-mise run new-app MyApp --from una-sdk/Examples/Apps/RunLVGL
-```
-
-It ends by listing remaining instances of the example app name (display strings, window
-title, comments) for you to review/edit by hand.
-
-## Build and simulate
+## Build, test and simulate
 
 ```sh
 mise run build   # .uapp -> Output/
+mise run test    # host unit tests (needs googletest installed)
 mise run sim     # build + run the Linux simulator (keys 1-4 = L1 L2 R1 R2, 5 = wrist, Esc = quit)
 mise run assets  # regenerate LVGL fonts/images
 mise run clean
