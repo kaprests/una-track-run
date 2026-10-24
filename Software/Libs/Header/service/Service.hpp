@@ -40,7 +40,7 @@ private:
     static constexpr uint32_t skSamplePeriod         = 1000;
     static constexpr uint32_t skSampleLatency        = 1000;
 
-    static constexpr float    skPhaseEndWarningM         = 15.0f;
+    static constexpr float    skReminderDistanceM        = 15.0f;
     static constexpr uint32_t skPhaseEndPromptPeriodSec  = 10;
 
     static constexpr uint32_t skBatteryLogPeriodMs   = 5 * 60 * 1000;
@@ -98,6 +98,7 @@ private:
     SegmentCorrector  mCorrector;
     TrackDistance     mDistance;
     std::time_t       mSegmentStartActiveSec = 0;
+    float             mRemindedMarkM         = -1.0f;
     bool              mAnchoredThisSession   = false;
 
     // -- GPS speed (outdoor mode) ---------------------------------------------
@@ -161,7 +162,6 @@ private:
     bool        mIntervalsCompleted   = false; ///< Set after workout completed; blocks further phase processing
     std::time_t mPhaseStartActiveSec  = 0;     ///< mTimeCounter.getValueActive() at phase start
     float       mPhaseStartActiveDist = 0.0f;  ///< mDistanceCounter.getValueActive() at phase start
-    bool        mPhaseEndWarned       = false; ///< The approach warning of a distance phase was given
 
     /// Maps interval phases to workout_step message_index values for the FIT
     /// workout description (0xFFFF = no associated step).
@@ -207,8 +207,14 @@ private:
     void startTrack(std::time_t utc);
     void processTrack();
     void saveLap(std::optional<float> exactDistanceM = std::nullopt);
-    /// Ends a known-length segment (or an unmeasured one without a length). True if the length corrected the pace.
-    bool endSegment(std::optional<float> knownM);
+    /// Ends the current segment at its mark and corrects the pace with it. Returns the length it covered, when known.
+    std::optional<float> endSegment();
+    std::optional<TrackDistance::Segment> lapSegment() const;
+    bool isEarlyPress() const;
+    void rejectPress();
+    void remindOfMark();
+    /// The lap popup reads the last snapshot, so give it the exact lap.
+    void publishExactLap(float lapM);
     void stopTrack(bool discard);
     void pauseTrack(bool pause);
     void buildPartialSummary();
@@ -222,12 +228,12 @@ private:
     void processIntervals();
     void onIntervalsPhaseChange(bool alert, bool manual);
 
-    /// Length the runner covered in the current phase, when the phase is a set distance run on a track.
-    std::optional<float> knownPhaseDistanceM() const;
+    /// A set distance run on a track ends on the runner's press.
+    std::optional<TrackDistance::Segment> phaseSegment() const;
     /// Ends the phase as its own lap, anchoring the pace to the phase distance when it has one.
     void closeIntervalsPhase();
-    /// A distance phase on a track ends on the runner's press: warn on approach, then prompt.
-    void alertPhaseDistance(float targetM, float doneM);
+    /// Repeated prompt while a distance phase has reached its distance and awaits the press.
+    void promptPhaseEnd();
 
     /// Build the workout_step list from the intervals config, emit the workout /
     /// workout_step messages, and populate mIntervalsStepMap for lap referencing.

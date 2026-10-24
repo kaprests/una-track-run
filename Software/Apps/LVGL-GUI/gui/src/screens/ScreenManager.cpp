@@ -133,6 +133,8 @@ Screen* ScreenManager::create(ScreenId id)
         case ScreenId::MenuLapLength:             return new MenuSettingValueScreen(m, Setting::LapLength);
         case ScreenId::MenuLane:                  return new MenuSettingValueScreen(m, Setting::Lane);
         case ScreenId::MenuLaneWidth:             return new MenuSettingValueScreen(m, Setting::LaneWidth);
+        case ScreenId::MenuMissedLap:             return new MenuSettingValueScreen(m, Setting::MissedLap);
+        case ScreenId::MenuEarlyPress:            return new MenuSettingValueScreen(m, Setting::EarlyPress);
 
         case ScreenId::TrackStartConfirm:         return new TrackStartConfirmScreen(m);
         case ScreenId::TrackIntervalsCountdown:   return new TrackIntervalsCountdownScreen(m);

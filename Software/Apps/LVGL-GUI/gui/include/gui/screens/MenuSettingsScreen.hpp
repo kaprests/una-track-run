@@ -34,12 +34,10 @@ protected:
 private:
     using Menu = App::MenuNav::Root::Settings;
 
-    void togglePhoneNotif();
+    void activate(uint16_t item);
 
     WheelMenu::Item mItems[Menu::ID_COUNT] {};
-    char mLapLengthTip[12] {};
-    char mLaneTip[12] {};
-    char mLaneWidthTip[12] {};
+    char mTips[Menu::ID_COUNT][12] {};
 
     std::unique_ptr<Widgets::Title>           mTitle;
     std::unique_ptr<Widgets::SensorStatusRow> mSensorRow;

@@ -9,7 +9,38 @@
 #include "gui/screens/ScreenManager.hpp"
 #include "gui/Assets.hpp"
 
+#include <algorithm>
+#include <iterator>
+
+namespace
+{
 using Style = WheelMenu::Item::Style;
+using Menu  = App::MenuNav::Root::Settings;
+
+struct Page {
+    uint16_t item;
+    ScreenId screen;
+};
+
+struct Toggle {
+    uint16_t item;
+    bool Settings::* field;
+};
+
+constexpr Page kPages[] = {
+    { Menu::ID_LAP_LENGTH, ScreenId::MenuLapLength },
+    { Menu::ID_LANE,       ScreenId::MenuLane },
+    { Menu::ID_LANE_WIDTH, ScreenId::MenuLaneWidth },
+    { Menu::ID_MISSED_LAP, ScreenId::MenuMissedLap },
+    { Menu::ID_EARLY_MIN,  ScreenId::MenuEarlyPress },
+};
+
+constexpr Toggle kToggles[] = {
+    { Menu::ID_LAP_REMINDER, &Settings::lapReminderEn },
+    { Menu::ID_EARLY_GUARD,  &Settings::earlyPressGuardEn },
+    { Menu::ID_PHONE_NOTIF,  &Settings::phoneNotifEn },
+};
+} // namespace
 
 MenuSettingsScreen::MenuSettingsScreen(Model& model)
     : Screen(model)
@@ -18,10 +49,15 @@ MenuSettingsScreen::MenuSettingsScreen(Model& model)
 
 void MenuSettingsScreen::build()
 {
-    mItems[Menu::ID_LAP_LENGTH]  = { Style::Tip, "Lap\nLength", "Lap Length", &poppins_semibold_25, mLapLengthTip };
-    mItems[Menu::ID_LANE]        = { Style::Tip, "Lane", nullptr, &poppins_semibold_25, mLaneTip };
-    mItems[Menu::ID_LANE_WIDTH]  = { Style::Tip, "Lane\nWidth", "Lane Width", &poppins_semibold_25, mLaneWidthTip };
-    mItems[Menu::ID_PHONE_NOTIF] = { Style::Toggle, "Phone\nNotif.", "Phone Notif.", &poppins_semibold_25 };
+    const auto font = &poppins_semibold_25;
+    mItems[Menu::ID_LAP_LENGTH]   = { Style::Tip,    "Lap\nLength",     "Lap Length",     font, mTips[Menu::ID_LAP_LENGTH] };
+    mItems[Menu::ID_LANE]         = { Style::Tip,    "Lane",            nullptr,          font, mTips[Menu::ID_LANE] };
+    mItems[Menu::ID_LANE_WIDTH]   = { Style::Tip,    "Lane\nWidth",     "Lane Width",     font, mTips[Menu::ID_LANE_WIDTH] };
+    mItems[Menu::ID_LAP_REMINDER] = { Style::Toggle, "Lap\nReminder",   "Lap Reminder",   font };
+    mItems[Menu::ID_MISSED_LAP]   = { Style::Tip,    "Missed\nLap",     "Missed Lap",     font, mTips[Menu::ID_MISSED_LAP] };
+    mItems[Menu::ID_EARLY_GUARD]  = { Style::Toggle, "Press\nGuard",    "Press Guard",    font };
+    mItems[Menu::ID_EARLY_MIN]    = { Style::Tip,    "Guard\nLevel",    "Guard Level",    font, mTips[Menu::ID_EARLY_MIN] };
+    mItems[Menu::ID_PHONE_NOTIF]  = { Style::Toggle, "Phone\nNotif.",   "Phone Notif.",   font };
 
     mMenu      = std::make_unique<WheelMenu>(mRoot, mItems, Menu::ID_COUNT);
     mButtons   = std::make_unique<Widgets::Buttons>(mRoot);
@@ -51,36 +87,41 @@ void MenuSettingsScreen::onKey(uint8_t code)
     switch (code) {
         case Btn::L1: mMenu->prev(); break;
         case Btn::L2: mMenu->next(); break;
-        case Btn::R1:
-            switch (mMenu->selected()) {
-                case Menu::ID_LAP_LENGTH: ScreenManager::instance().goTo(ScreenId::MenuLapLength); break;
-                case Menu::ID_LANE:       ScreenManager::instance().goTo(ScreenId::MenuLane); break;
-                case Menu::ID_LANE_WIDTH: ScreenManager::instance().goTo(ScreenId::MenuLaneWidth); break;
-                default: togglePhoneNotif(); break;
-            }
-            break;
-        case Btn::R2:
-            ScreenManager::instance().goTo(ScreenId::Main);
-            break;
-        default:
-            break;
+        case Btn::R1: activate(mMenu->selected()); break;
+        case Btn::R2: ScreenManager::instance().goTo(ScreenId::Main); break;
+        default: break;
     }
 }
 
-void MenuSettingsScreen::togglePhoneNotif()
+void MenuSettingsScreen::activate(uint16_t item)
 {
-    Settings sett = mModel.getSettings();
-    sett.phoneNotifEn = !sett.phoneNotifEn;
-    mModel.saveSettings(sett);
-    onSettings(sett);
+    const auto page = std::find_if(std::begin(kPages), std::end(kPages),
+                                   [item](const Page& p) { return p.item == item; });
+    if (page != std::end(kPages)) {
+        ScreenManager::instance().goTo(page->screen);
+        return;
+    }
+
+    const auto toggle = std::find_if(std::begin(kToggles), std::end(kToggles),
+                                     [item](const Toggle& t) { return t.item == item; });
+    if (toggle != std::end(kToggles)) {
+        Settings sett = mModel.getSettings();
+        sett.*toggle->field = !(sett.*toggle->field);
+        mModel.saveSettings(sett);
+        onSettings(sett);
+    }
 }
 
 void MenuSettingsScreen::onSettings(const Settings& settings)
 {
-    snprintf(mLapLengthTip, sizeof(mLapLengthTip), "%.0f m", settings.lapLengthM);
-    snprintf(mLaneTip, sizeof(mLaneTip), "%u", static_cast<unsigned>(settings.lane));
-    snprintf(mLaneWidthTip, sizeof(mLaneWidthTip), "%.2f m", settings.laneWidthM);
-    mItems[Menu::ID_PHONE_NOTIF].toggleState = settings.phoneNotifEn;
+    snprintf(mTips[Menu::ID_LAP_LENGTH], sizeof(mTips[0]), "%.0f m", settings.lapLengthM);
+    snprintf(mTips[Menu::ID_LANE], sizeof(mTips[0]), "%u", static_cast<unsigned>(settings.lane));
+    snprintf(mTips[Menu::ID_LANE_WIDTH], sizeof(mTips[0]), "%.2f m", settings.laneWidthM);
+    snprintf(mTips[Menu::ID_MISSED_LAP], sizeof(mTips[0]), "%u %%", static_cast<unsigned>(settings.missedLapPct));
+    snprintf(mTips[Menu::ID_EARLY_MIN], sizeof(mTips[0]), "%u %%", static_cast<unsigned>(settings.earlyPressPct));
+    for (const Toggle& toggle : kToggles) {
+        mItems[toggle.item].toggleState = settings.*toggle.field;
+    }
     mMenu->refresh();
 }
 

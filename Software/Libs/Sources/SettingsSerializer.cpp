@@ -82,6 +82,10 @@ bool SettingsSerializer::save(const Settings &settings)
     writer.add("lap_length_m",   settings.lapLengthM);
     writer.add("lane",           settings.lane);
     writer.add("lane_width_m",   settings.laneWidthM);
+    writer.add("lap_reminder_en",      settings.lapReminderEn);
+    writer.add("missed_lap_pct",       settings.missedLapPct);
+    writer.add("early_press_guard_en", settings.earlyPressGuardEn);
+    writer.add("early_press_pct",      settings.earlyPressPct);
 
     writer.startMap("intervals");
     writer.add("repeats_num",   settings.intervals.repeatsNum);
@@ -171,6 +175,13 @@ bool SettingsSerializer::load(Settings &settings)
     settings.lapLengthM = std::clamp(settings.lapLengthM, Settings::Lap::kLengthMinM, Settings::Lap::kLengthMaxM);
     settings.lane       = std::clamp(settings.lane, Settings::Lap::kLaneMin, Settings::Lap::kLaneMax);
     settings.laneWidthM = std::clamp(settings.laneWidthM, Settings::Lap::kLaneWidthMinM, Settings::Lap::kLaneWidthMaxM);
+
+    reader.get("lap_reminder_en",      settings.lapReminderEn);
+    reader.get("missed_lap_pct",       settings.missedLapPct);
+    reader.get("early_press_guard_en", settings.earlyPressGuardEn);
+    reader.get("early_press_pct",      settings.earlyPressPct);
+    settings.missedLapPct  = std::clamp(settings.missedLapPct, Settings::Lap::kMissedPctMin, Settings::Lap::kMissedPctMax);
+    settings.earlyPressPct = std::clamp(settings.earlyPressPct, Settings::Lap::kEarlyPctMin, Settings::Lap::kEarlyPctMax);
 
     reader.get("intervals.repeats_num",   settings.intervals.repeatsNum);
     reader.get("intervals.run_time",      settings.intervals.runTime);

@@ -1,7 +1,7 @@
 /**
  ******************************************************************************
  * @file    MenuSettingValueScreen.hpp
- * @brief   Value list for one of the track settings: lap length, lane, lane width.
+ * @brief   Value list for one of the track settings, chosen by Kind.
  ******************************************************************************
  */
 
@@ -17,7 +17,7 @@
 class MenuSettingValueScreen : public Screen
 {
 public:
-    enum class Kind : uint8_t { LapLength, Lane, LaneWidth };
+    enum class Kind : uint8_t { LapLength, Lane, LaneWidth, MissedLap, EarlyPress };
 
     MenuSettingValueScreen(Model& model, Kind kind);
 

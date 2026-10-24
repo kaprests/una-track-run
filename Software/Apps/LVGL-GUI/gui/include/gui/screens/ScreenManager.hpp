@@ -36,6 +36,8 @@ enum class ScreenId : uint8_t {
     MenuLapLength,
     MenuLane,
     MenuLaneWidth,
+    MenuMissedLap,
+    MenuEarlyPress,
     // Activity
     TrackStartConfirm,
     TrackIntervalsCountdown,

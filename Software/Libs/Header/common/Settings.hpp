@@ -19,7 +19,7 @@
  */
 struct Settings {
     /// Settings version.
-    static constexpr uint8_t kVersion = 2;
+    static constexpr uint8_t kVersion = 3;
 
     /// Indoor: no GPS, pace from cadence. Outdoor: GPS is connected as well.
     enum class Mode : uint8_t { Indoor, Outdoor };
@@ -34,6 +34,12 @@ struct Settings {
         static constexpr float   kLaneWidthMinM  = 0.80f;
         static constexpr float   kLaneWidthMaxM  = 1.30f;
         static constexpr float   kLaneWidthStepM = 0.05f;
+        static constexpr uint8_t kMissedPctMin   = 10;
+        static constexpr uint8_t kMissedPctMax   = 50;
+        static constexpr uint8_t kMissedPctStep  = 5;
+        static constexpr uint8_t kEarlyPctMin    = 30;
+        static constexpr uint8_t kEarlyPctMax    = 90;
+        static constexpr uint8_t kEarlyPctStep   = 10;
     };
 
     /**
@@ -79,6 +85,11 @@ struct Settings {
     float    lapLengthM    = 200.0f; ///< Length of the track's inner lane.
     uint8_t  lane          = 1;      ///< Lane the user runs in; 1 is the inner lane.
     float    laneWidthM    = 1.0f;
+
+    bool     lapReminderEn     = true;  ///< Vibrate shortly before the lap or rep mark.
+    uint8_t  missedLapPct      = 20;    ///< Past the mark by this share of the lap, the press counts as forgotten.
+    bool     earlyPressGuardEn = true;  ///< Ignore a press made well before the mark.
+    uint8_t  earlyPressPct     = 50;    ///< Share of the lap a press must have covered to count.
 
     Intervals intervals {};  ///< Interval training settings.
 

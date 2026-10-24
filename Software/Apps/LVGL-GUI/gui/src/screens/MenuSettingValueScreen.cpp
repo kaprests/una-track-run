@@ -21,6 +21,8 @@ struct Range {
     float       first;
     float       step;
     uint16_t    count;
+    float     (*get)(const Settings&);
+    void      (*set)(Settings&, float);
 };
 
 constexpr uint16_t countOf(float first, float last, float step)
@@ -29,34 +31,41 @@ constexpr uint16_t countOf(float first, float last, float step)
 }
 
 constexpr Range kRanges[] = {
-    { "LAP LENGTH", "%.0f m", Lap::kLengthMinM,    Lap::kLengthStepM,    countOf(Lap::kLengthMinM, Lap::kLengthMaxM, Lap::kLengthStepM) },
-    { "LANE",       "%.0f",   Lap::kLaneMin,       1.0f,                 countOf(Lap::kLaneMin, Lap::kLaneMax, 1.0f) },
-    { "LANE WIDTH", "%.2f m", Lap::kLaneWidthMinM, Lap::kLaneWidthStepM, countOf(Lap::kLaneWidthMinM, Lap::kLaneWidthMaxM, Lap::kLaneWidthStepM) },
+    { "LAP LENGTH", "%.0f m", Lap::kLengthMinM, Lap::kLengthStepM,
+      countOf(Lap::kLengthMinM, Lap::kLengthMaxM, Lap::kLengthStepM),
+      [](const Settings& s) { return s.lapLengthM; },
+      [](Settings& s, float v) { s.lapLengthM = v; } },
+    { "LANE", "%.0f", Lap::kLaneMin, 1.0f,
+      countOf(Lap::kLaneMin, Lap::kLaneMax, 1.0f),
+      [](const Settings& s) { return static_cast<float>(s.lane); },
+      [](Settings& s, float v) { s.lane = static_cast<uint8_t>(v); } },
+    { "LANE WIDTH", "%.2f m", Lap::kLaneWidthMinM, Lap::kLaneWidthStepM,
+      countOf(Lap::kLaneWidthMinM, Lap::kLaneWidthMaxM, Lap::kLaneWidthStepM),
+      [](const Settings& s) { return s.laneWidthM; },
+      [](Settings& s, float v) { s.laneWidthM = v; } },
+    { "MISSED LAP", "%.0f %%", Lap::kMissedPctMin, Lap::kMissedPctStep,
+      countOf(Lap::kMissedPctMin, Lap::kMissedPctMax, Lap::kMissedPctStep),
+      [](const Settings& s) { return static_cast<float>(s.missedLapPct); },
+      [](Settings& s, float v) { s.missedLapPct = static_cast<uint8_t>(v); } },
+    { "GUARD LEVEL", "%.0f %%", Lap::kEarlyPctMin, Lap::kEarlyPctStep,
+      countOf(Lap::kEarlyPctMin, Lap::kEarlyPctMax, Lap::kEarlyPctStep),
+      [](const Settings& s) { return static_cast<float>(s.earlyPressPct); },
+      [](Settings& s, float v) { s.earlyPressPct = static_cast<uint8_t>(v); } },
 };
 
+constexpr bool fitsLists()
+{
+    for (const Range& range : kRanges) {
+        if (range.count > 81) {
+            return false;
+        }
+    }
+    return true;
+}
+static_assert(fitsLists(), "value lists are sized for 81 entries");
+
 const Range& rangeOf(MenuSettingValueScreen::Kind kind) { return kRanges[static_cast<size_t>(kind)]; }
-
-float valueOf(const Settings& s, MenuSettingValueScreen::Kind kind)
-{
-    switch (kind) {
-        case MenuSettingValueScreen::Kind::LapLength: return s.lapLengthM;
-        case MenuSettingValueScreen::Kind::Lane:      return static_cast<float>(s.lane);
-        default:                                      return s.laneWidthM;
-    }
-}
-
-void assign(Settings& s, MenuSettingValueScreen::Kind kind, float value)
-{
-    switch (kind) {
-        case MenuSettingValueScreen::Kind::LapLength: s.lapLengthM = value; break;
-        case MenuSettingValueScreen::Kind::Lane:      s.lane       = static_cast<uint8_t>(value); break;
-        default:                                      s.laneWidthM = value; break;
-    }
-}
 } // namespace
-
-static_assert(kRanges[0].count <= 81 && kRanges[1].count <= 81 && kRanges[2].count <= 81,
-              "value lists are sized for 81 entries");
 
 MenuSettingValueScreen::MenuSettingValueScreen(Model& model, Kind kind)
     : Screen(model)
@@ -82,7 +91,7 @@ void MenuSettingValueScreen::build()
 void MenuSettingValueScreen::onShow()
 {
     const Range& range = rangeOf(mKind);
-    const float  index = std::round((valueOf(mModel.getSettings(), mKind) - range.first) / range.step);
+    const float  index = std::round((range.get(mModel.getSettings()) - range.first) / range.step);
     mMenu->select(static_cast<uint16_t>(std::clamp(index, 0.0f, static_cast<float>(mCount - 1))));
     mModel.resetIdleTimer();
 }
@@ -103,6 +112,6 @@ void MenuSettingValueScreen::save()
 {
     const Range& range = rangeOf(mKind);
     Settings sett = mModel.getSettings();
-    assign(sett, mKind, range.first + range.step * static_cast<float>(mMenu->selected()));
+    range.set(sett, range.first + range.step * static_cast<float>(mMenu->selected()));
     mModel.saveSettings(sett);
 }

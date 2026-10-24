@@ -502,34 +502,76 @@ void Service::handleEvent(const CustomMessage::ManualLap& /*event*/)
     if (usesGps()) {
         saveLap();
     } else {
-        const float lapM     = mSettings.laneLapLengthM();
-        const bool  anchored = endSegment(lapM);
-        if (anchored) {
-            mTrackData.lapDistance = lapM;
-            mTrackData.avgLapSpeed = speedFromTotals(lapM, static_cast<float>(mTrackData.lapTime));
-            mTrackData.lapPace     = getPace(mTrackData.avgLapSpeed, mSpeedCounter.getMinValid());
-            SDK::send_msg<CustomMessage::TrackDataUpd>(mKernel, mTrackData);
+        if (isEarlyPress()) {
+            rejectPress();
+            return;
         }
-        saveLap(anchored ? std::optional<float>(lapM) : std::nullopt);
+        const std::optional<float> lapM = endSegment();
+        mDistance.beginSegment(lapSegment());
+        if (lapM) {
+            publishExactLap(*lapM);
+        }
+        saveLap(lapM);
     }
     SDK::send_msg<CustomMessage::LapEnded>(mKernel, mTrackData.lapNum);
     notifyLapEnd();
 }
 
-bool Service::endSegment(std::optional<float> knownM)
+std::optional<float> Service::endSegment()
 {
-    const float        rawTotalM = mEstimator.distanceM();
-    const std::time_t  activeSec = mTimeCounter.getValueActive();
+    const float       rawTotalM   = mEstimator.distanceM();
+    const float       rawSegmentM = mDistance.rawSegmentM(rawTotalM);
+    const std::time_t activeSec   = mTimeCounter.getValueActive();
 
-    const bool anchored = knownM &&
-        mCorrector.anchor(mDistance.rawSegmentM(rawTotalM), *knownM,
-                          static_cast<float>(activeSec - mSegmentStartActiveSec));
-
-    mDistance.closeSegment(rawTotalM, mCorrector.k(), anchored ? knownM : std::nullopt);
+    const std::optional<float> coveredM = mDistance.closeSegment(rawTotalM, mCorrector.k());
+    if (coveredM) {
+        mAnchoredThisSession |= mCorrector.anchor(rawSegmentM, *coveredM,
+                                                  static_cast<float>(activeSec - mSegmentStartActiveSec));
+    }
     mDistanceCounter.add(mDistance.total(rawTotalM, mCorrector.k()));
     mSegmentStartActiveSec = activeSec;
-    mAnchoredThisSession  |= anchored;
-    return anchored;
+    return coveredM;
+}
+
+std::optional<TrackDistance::Segment> Service::lapSegment() const
+{
+    if (usesGps()) {
+        return std::nullopt;
+    }
+    return TrackDistance::Segment{ mSettings.laneLapLengthM(), true };
+}
+
+bool Service::isEarlyPress() const
+{
+    return !usesGps() && mSettings.earlyPressGuardEn &&
+           mDistance.isEarlyPress(mEstimator.distanceM(), mCorrector.k(),
+                                  static_cast<float>(mSettings.earlyPressPct) / 100.0f);
+}
+
+void Service::rejectPress()
+{
+    playVibroPattern(SDK::Message::RequestVibroPlay::Effect::STRONG_BUZZ_100);
+}
+
+void Service::remindOfMark()
+{
+    const float rawTotalM = mEstimator.distanceM();
+    const auto  mark      = mDistance.markM(rawTotalM, mCorrector.k());
+    if (!mSettings.lapReminderEn || !mark || *mark == mRemindedMarkM) {
+        return;
+    }
+    if (*mark - mDistance.estimate(rawTotalM, mCorrector.k()) <= skReminderDistanceM) {
+        mRemindedMarkM = *mark;
+        playVibroPattern(SDK::Message::RequestVibroPlay::Effect::STRONG_CLICK_100);
+    }
+}
+
+void Service::publishExactLap(float lapM)
+{
+    mTrackData.lapDistance = lapM;
+    mTrackData.avgLapSpeed = speedFromTotals(lapM, static_cast<float>(mTrackData.lapTime));
+    mTrackData.lapPace     = getPace(mTrackData.avgLapSpeed, mSpeedCounter.getMinValid());
+    SDK::send_msg<CustomMessage::TrackDataUpd>(mKernel, mTrackData);
 }
 
 void Service::setCapabilities()
@@ -795,8 +837,10 @@ void Service::startTrack(std::time_t utc)
 
     mCalibrationStore.load();
     mCorrector             = SegmentCorrector(mCalibrationStore.prior(mSettings.lapLengthM, mSettings.lane));
-    mDistance.reset();
+    mDistance              = TrackDistance(static_cast<float>(mSettings.missedLapPct) / 100.0f);
+    mDistance.beginSegment(lapSegment());
     mSegmentStartActiveSec = 0;
+    mRemindedMarkM         = -1.0f;
     mAnchoredThisSession   = false;
 
     mSessionNotEmpty = false;
@@ -863,6 +907,7 @@ void Service::processTrack()
         mCorrector.drift(dt);
         mDistanceCounter.add(mDistance.total(mEstimator.distanceM(), mCorrector.k()));
         mSpeedCounter.add(mCorrector.k() * mEstimator.speedMps());
+        remindOfMark();
     }
 
     // Time, s
@@ -1152,9 +1197,14 @@ void Service::onWristTilt(uint32_t timestampMs)
 
 void Service::handleEvent(const CustomMessage::IntervalsNextPhase& event)
 {
-    if (mIntervalsMode && mTrackState == Track::State::ACTIVE) {
-        advanceIntervalsPhase(true);
+    if (!mIntervalsMode || mTrackState != Track::State::ACTIVE) {
+        return;
     }
+    if (isEarlyPress()) {
+        rejectPress();
+        return;
+    }
+    advanceIntervalsPhase(true);
 }
 
 void Service::emitIntervalsWorkout()
@@ -1286,7 +1336,6 @@ void Service::startIntervalsPhase(Track::IntervalsPhase phase)
 {
     mPhaseStartActiveSec  = mTimeCounter.getValueActive();
     mPhaseStartActiveDist = mDistanceCounter.getValueActive();
-    mPhaseEndWarned       = false;
 
     Track::IntervalsData& iv   = mTrackData.intervals;
     const Settings::Intervals& cfg = mSettings.intervals;
@@ -1341,6 +1390,8 @@ void Service::startIntervalsPhase(Track::IntervalsPhase phase)
         break;
     }
 
+    mDistance.beginSegment(phaseSegment());
+
     LOG_DEBUG("Intervals: phase=%u metric=%u repeat=%u/%u\n",
               static_cast<uint8_t>(iv.phase),
               static_cast<uint8_t>(iv.metric),
@@ -1385,8 +1436,8 @@ void Service::processIntervals()
         iv.distRemaining = (done < target) ? (target - done) : 0.0f;
         if (usesGps()) {
             autoAdvance = (done >= target);
-        } else {
-            alertPhaseDistance(target, done);
+        } else if (done >= target) {
+            promptPhaseEnd();
         }
         break;
     }
@@ -1397,38 +1448,28 @@ void Service::processIntervals()
     }
 }
 
-std::optional<float> Service::knownPhaseDistanceM() const
+std::optional<TrackDistance::Segment> Service::phaseSegment() const
 {
     const Track::IntervalsData& iv = mTrackData.intervals;
     if (usesGps() || iv.metric != Track::IntervalsMetric::DISTANCE) {
         return std::nullopt;
     }
-    return iv.phase == Track::IntervalsPhase::RUN ? mSettings.intervals.runDistance
-                                                  : mSettings.intervals.restDistance;
+    const float lengthM = iv.phase == Track::IntervalsPhase::RUN ? mSettings.intervals.runDistance
+                                                                 : mSettings.intervals.restDistance;
+    return TrackDistance::Segment{ lengthM, false };
 }
 
 void Service::closeIntervalsPhase()
 {
-    const std::optional<float> known = knownPhaseDistanceM();
-    const bool anchored = !usesGps() && endSegment(known);
+    const std::optional<float> phaseM = usesGps() ? std::nullopt : endSegment();
     if (mLapNotEmpty) {
-        saveLap(anchored ? known : std::nullopt);
+        saveLap(phaseM);
     }
 }
 
-void Service::alertPhaseDistance(float targetM, float doneM)
+void Service::promptPhaseEnd()
 {
-    const float remainingM = targetM - doneM;
-
-    if (remainingM > skPhaseEndWarningM) {
-        return;
-    }
-    if (remainingM > 0.0f) {
-        if (!mPhaseEndWarned) {
-            mPhaseEndWarned = true;
-            playVibroPattern(SDK::Message::RequestVibroPlay::Effect::STRONG_CLICK_100);
-        }
-    } else if (mTimeCounter.getValueActive() % skPhaseEndPromptPeriodSec == 0) {
+    if (mTimeCounter.getValueActive() % skPhaseEndPromptPeriodSec == 0) {
         backlightOn();
         playVibroPattern(SDK::Message::RequestVibroPlay::Effect::SHORT_DOUBLE_CLICK_STRONG_1_100);
         playBuzzerPattern(150, 2);
@@ -1496,6 +1537,7 @@ void Service::advanceIntervalsPhase(bool manual)
         // final phase as a lap, then drop out of intervals mode so the track
         // screen reverts to normal faces and R2 records a lap (not a phase advance).
         closeIntervalsPhase();
+        mDistance.beginSegment(lapSegment());
         mIntervalsCompleted = true;
         mIntervalsMode = false;
         mTrackData.intervalsMode = false;
