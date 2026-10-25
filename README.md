@@ -53,6 +53,7 @@ mise run build   # .uapp -> Output/
 mise run test    # host unit tests (needs googletest installed)
 mise run sim     # build + run the Linux simulator (keys 1-4 = L1 L2 R1 R2, 5 = wrist, Esc = quit)
 mise run assets  # regenerate LVGL fonts/images
+mise run icons   # regenerate the app icons in Resources/
 mise run clean
 ```
 

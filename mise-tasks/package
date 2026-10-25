@@ -41,7 +41,9 @@ EOF
 
 mkdir -p dist
 zip="dist/${app}_${version}.zip"
-python - "$zip" "Output/$uapp" Resources/icon_60x60.png "$manifest" <<'EOF'
+icon=Resources/icon_store.png
+[ -f "$icon" ] || icon=Resources/icon_60x60.png
+python - "$zip" "Output/$uapp" "$icon" "$manifest" <<'EOF'
 import sys, zipfile
 out, uapp, icon, manifest = sys.argv[1:]
 with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
