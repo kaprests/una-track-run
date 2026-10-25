@@ -1,7 +1,26 @@
 {
-  "id": "F9021B7DA0E8A21D",
-  "stravaExport": false,
-  "appVersion": "0.1.0",
+  "manifest_version": 1,
+  "type": [
+    "activity"
+  ],
+  "name": "TrackRun",
+  "icon": "icon.png",
   "binary": "TrackRun_0.1.0.uapp",
-  "icon": "icon.png"
+  "appVersion": "0.1.0",
+  "minKernelVersion": "1.4.0",
+  "requiredHardware": [
+    "ACCELEROMETER",
+    "HR"
+  ],
+  "stravaExport": true,
+  "description": "Accurate live pace on the running track, indoors without GPS and outdoors with it. Pace comes from your cadence and the personal stride model the Running app builds on your outdoor runs, or from GPS outdoors. Press the button each lap, and the known lap length corrects your pace and makes the distance exact. Outdoors, laps can be counted automatically when GPS passes the start line. Set lap length, lane and lane width, run free laps or intervals with warm-up, and save the run as a track activity with exact laps. Early version: developed in the simulator and not yet tested on a real watch.",
+  "id": "F9021B7DA0E8A21D",
+  "supportsLaps": true,
+  "supportsDistance": true,
+  "supportsTrack": true,
+  "supportsHeartbeat": true,
+  "supportsElevation": false,
+  "supportsStep": false,
+  "supportsSpeed": "pace",
+  "customMeasures": []
 }
