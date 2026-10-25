@@ -72,6 +72,16 @@ struct IntervalsData {
 // =============================================================================
 
 /**
+ * @brief A finished lap, as shown in the lap popup.
+ */
+struct Lap {
+    uint32_t    number   = 0;     ///< 1-based
+    float       distance = 0.0f;  ///< m
+    std::time_t time     = 0;     ///< s, active
+    float       pace     = 0.0f;  ///< s/m
+};
+
+/**
  * @brief Real-time metrics snapshot; updated every second by the Service.
  *
  * All distances are in metres, speeds in m/s, pace in s/m, times in seconds.

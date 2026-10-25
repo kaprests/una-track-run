@@ -55,6 +55,7 @@ endforeach()
 
 add_executable(TrackRunSimulator
     main.cpp
+    ScreenshotTour.cpp
     ${GUI_APP_SOURCES}
     ${LIBS_SOURCES}
     ${UNA_SDK_SOURCES_SIMULATOR}

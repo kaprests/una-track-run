@@ -45,7 +45,7 @@ public:
     virtual void onSettings(const Settings& settings) { (void)settings; }
     virtual void onTrackState(const Track::State& state) { (void)state; }
     virtual void onTrackData(const Track::Data& data) { (void)data; }
-    virtual void onLapChanged(uint8_t lapEnd) { (void)lapEnd; }
+    virtual void onLapEnded() {}
     virtual void onIntervalsPhaseAlert() {}
     virtual void onIntervalsWorkoutCompleted() {}
     virtual void onActivitySummary(const ActivitySummary& summary) { (void)summary; }

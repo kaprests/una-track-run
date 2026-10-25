@@ -34,7 +34,7 @@ void MenuIntervalsScreen::build()
     mButtons->set(Widgets::Buttons::NONE, Widgets::Buttons::NONE,
                   Widgets::Buttons::AMBER, Widgets::Buttons::WHITE);
     mTitle     = std::make_unique<Widgets::Title>(mRoot, "INTERVALS");
-    mSensorRow = std::make_unique<Widgets::SensorStatusRow>(mRoot, 0, 52, 240, 24, mModel.usesGps());
+    mSensorRow = std::make_unique<Widgets::SensorStatusRow>(mRoot, 0, 52, 240, 24);
 }
 
 void MenuIntervalsScreen::onShow()
@@ -133,7 +133,7 @@ void MenuIntervalsScreen::onSettings(const Settings& settings)
 
 void MenuIntervalsScreen::onGpsFix(bool acquired)
 {
-    mSensorRow->setGps(Widgets::SensorStatusRow::gpsState(acquired));
+    mSensorRow->setGps(Widgets::SensorStatusRow::gpsState(mModel.usesGps(), acquired));
 }
 
 void MenuIntervalsScreen::onAccessoryStatus(uint8_t state, const char* /*name*/)

@@ -114,6 +114,7 @@ public:
     void trackResume();
     bool isTrackPaused() const;
     const Track::Data& getTrackData() const;
+    const Track::Lap&  getLastLap() const;
     void saveLap();
     void saveTrack();
     void discardTrack();
@@ -164,6 +165,7 @@ private:
     Track::State           mTrackState            {};
     const ActivitySummary* mActivitySummary = nullptr;
     Track::Data            mTrackData             {};
+    Track::Lap             mLastLap               {};
 };
 
 #endif // MODEL_HPP

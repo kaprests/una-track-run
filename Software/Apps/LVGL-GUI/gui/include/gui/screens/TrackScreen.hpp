@@ -32,7 +32,7 @@ public:
     void onTrackData(const Track::Data& data) override;
     void onBatteryLevel(uint8_t level) override;
     void onTime(uint8_t hour, uint8_t minute, uint8_t sec) override;
-    void onLapChanged(uint8_t lapEnd) override;
+    void onLapEnded() override;
     void onIntervalsPhaseAlert() override;
     void onIntervalsWorkoutCompleted() override;
     void onGpsFix(bool acquired) override;

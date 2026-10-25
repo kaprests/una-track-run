@@ -223,6 +223,11 @@ const Track::Data& Model::getTrackData() const
     return mTrackData;
 }
 
+const Track::Lap& Model::getLastLap() const
+{
+    return mLastLap;
+}
+
 void Model::saveLap()
 {
     SDK::send_msg<CustomMessage::ManualLap>(mKernel);
@@ -316,6 +321,7 @@ bool Model::customMessageHandler(SDK::MessageBase* message)
             memcpy(mHrThresholds, msg->hrThresholds, sizeof(mHrThresholds));
             mHrThresholdsCount = msg->hrThresholdsCount;
             modelListener->onSettings(mSettings);
+            modelListener->onGpsFix(mGpsFix);   // whether GPS is used follows the mode
         } break;
 
         case CustomMessage::LOCAL_TIME: {
@@ -374,8 +380,8 @@ bool Model::customMessageHandler(SDK::MessageBase* message)
         } break;
 
         case CustomMessage::LAP_END: {
-            auto* msg = static_cast<CustomMessage::LapEnded*>(message);
-            modelListener->onLapChanged(static_cast<uint8_t>(msg->lapNum));
+            mLastLap = static_cast<CustomMessage::LapEnded*>(message)->lap;
+            modelListener->onLapEnded();
         } break;
 
         case CustomMessage::INTERVALS_PHASE_ALERT: {

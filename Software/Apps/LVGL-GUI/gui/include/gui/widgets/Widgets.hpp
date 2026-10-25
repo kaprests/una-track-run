@@ -62,11 +62,16 @@ public:
 };
 
 // -----------------------------------------------------------------------------
-/// The SDK sensor row with the app's heart icon and, outdoors only, the GPS icon.
+/// The SDK sensor row with the app's GPS and heart icons; the GPS icon is absent indoors.
 class SensorStatusRow : public SDK::LVGL::SensorStatusRow
 {
 public:
-    SensorStatusRow(lv_obj_t* parent, int32_t x, int32_t y, int32_t w, int32_t h, bool showGps);
+    SensorStatusRow(lv_obj_t* parent, int32_t x, int32_t y, int32_t w, int32_t h);
+
+    static State gpsState(bool usesGps, bool fix)
+    {
+        return usesGps ? SDK::LVGL::SensorStatusRow::gpsState(fix) : State::Absent;
+    }
 };
 
 // -----------------------------------------------------------------------------

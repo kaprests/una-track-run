@@ -109,7 +109,7 @@ void MenuSettingsScreen::build()
     mButtons->set(Widgets::Buttons::NONE, Widgets::Buttons::NONE,
                   Widgets::Buttons::AMBER, Widgets::Buttons::WHITE);
     mTitle     = std::make_unique<Widgets::Title>(mRoot, "SETTINGS");
-    mSensorRow = std::make_unique<Widgets::SensorStatusRow>(mRoot, 0, 52, 240, 24, outdoor);
+    mSensorRow = std::make_unique<Widgets::SensorStatusRow>(mRoot, 0, 52, 240, 24);
 }
 
 void MenuSettingsScreen::onShow()
@@ -181,7 +181,7 @@ void MenuSettingsScreen::onSettings(const Settings& settings)
 
 void MenuSettingsScreen::onGpsFix(bool acquired)
 {
-    mSensorRow->setGps(Widgets::SensorStatusRow::gpsState(acquired));
+    mSensorRow->setGps(Widgets::SensorStatusRow::gpsState(mModel.usesGps(), acquired));
 }
 
 void MenuSettingsScreen::onAccessoryStatus(uint8_t state, const char* /*name*/)

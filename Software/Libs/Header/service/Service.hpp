@@ -211,7 +211,7 @@ private:
     void sendInitialInfoToGui();
     void startTrack(std::time_t utc);
     void processTrack();
-    void saveLap(const LapEnd& end);
+    Track::Lap saveLap(const LapEnd& end);
     /// Ends the current segment at its mark and corrects the pace with it. Returns the length it covered, when known.
     std::optional<float> endSegment();
     /// Ends a free-run lap (or the warm-up lap) and starts the next one.
@@ -223,8 +223,6 @@ private:
     /// Outdoors: sets the start line where measured laps begin, if it is not set yet.
     void placeStartLine();
     void detectAutoLap();
-    /// The lap popup reads the last snapshot, so refresh its lap fields before the lap is saved.
-    void publishLap();
     void stopTrack(bool discard);
     void pauseTrack(bool pause);
     void buildPartialSummary();

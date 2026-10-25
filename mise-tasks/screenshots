@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+#MISE description="Capture simulator screenshots into screenshots/"
+#MISE depends=["sim-build"]
+#
+# Runs the simulator headless with ScreenshotTour, in a scratch file system so
+# Software/Output is left alone.
+set -euo pipefail
+
+app=$(sed -nE 's/^app = "([^"]+)".*/\1/p' mise.toml)
+bin="$PWD/Software/Apps/LVGL-GUI/simulator/build/bin/${app}Simulator"
+work="$PWD/Software/Apps/LVGL-GUI/simulator/build/screenshots"
+rm -rf "$work" screenshots
+mkdir -p "$work/raw"
+
+# shoot <tour>: starts from simulator-fs/<tour>/ when that folder exists.
+shoot() {
+  local root="$work/$1"
+  # The mock file system is ../../../../../Output from the working directory.
+  local cwd="$root/1/2/3/4/5"
+  mkdir -p "$cwd" "$root/Output"
+  if [ -d "simulator-fs/$1" ]; then cp -r "simulator-fs/$1/." "$root/Output/"; fi
+  (cd "$cwd" && SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy \
+     TRACKRUN_SCREENSHOT_DIR="$work/raw" TRACKRUN_SCREENSHOT_TOUR="$1" \
+     timeout 200 "$bin" > "$root/log.txt" 2>&1) ||
+    { echo "Tour '$1' failed; see $root/log.txt" >&2; exit 1; }
+}
+
+shoot indoor
+shoot outdoor
+python tools/screenshots.py "$work/raw" screenshots

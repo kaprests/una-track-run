@@ -148,16 +148,16 @@ namespace CustomMessage {
     };
 
     struct LapEnded : public SDK::MessageBase {
-        uint32_t lapNum;
+        Track::Lap lap;
         LapEnded()
             : SDK::MessageBase(LAP_END)
-            , lapNum(0)
+            , lap{}
         {}
 
-        explicit LapEnded(uint32_t lapNum)
+        explicit LapEnded(const Track::Lap& lap)
             : LapEnded()
         {
-            this->lapNum = lapNum;
+            this->lap = lap;
         }
     };
 

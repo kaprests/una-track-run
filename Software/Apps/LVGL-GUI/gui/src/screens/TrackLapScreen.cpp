@@ -47,17 +47,17 @@ void TrackLapScreen::onShow()
 {
     mModel.resetIdleTimer();
 
-    const bool imperial   = mModel.isUnitsImperial();
-    const Track::Data& d  = mModel.getTrackData();
+    const bool imperial  = mModel.isUnitsImperial();
+    const Track::Lap& lap = mModel.getLastLap();
     char buf[16];
 
-    snprintf(buf, sizeof(buf), "Lap %lu", static_cast<unsigned long>(d.lapNum + 1));
+    snprintf(buf, sizeof(buf), "Lap %lu", static_cast<unsigned long>(lap.number));
     mTitle->setText(buf);
-    Fmt::distanceLap(buf, sizeof(buf), Fmt::distUnits(d.lapDistance, imperial));
+    Fmt::distanceLap(buf, sizeof(buf), Fmt::distUnits(lap.distance, imperial));
     lv_label_set_text(mDistance, buf);
-    Fmt::shortTime(buf, sizeof(buf), d.lapTime);
+    Fmt::shortTime(buf, sizeof(buf), lap.time);
     lv_label_set_text(mTime, buf);
-    Fmt::pace(buf, sizeof(buf), Fmt::paceUnits(d.lapPace, imperial));
+    Fmt::pace(buf, sizeof(buf), Fmt::paceUnits(lap.pace, imperial));
     lv_label_set_text(mPace, buf);
 
     mDismiss = lv_timer_create(&TrackLapScreen::dismissCb, kDismissMs, this);

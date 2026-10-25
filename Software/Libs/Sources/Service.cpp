@@ -513,9 +513,9 @@ void Service::completeLap(ActivityWriter::LapTrigger trigger)
     mInWarmUp = false;
     mDistance.beginSegment(lapSegment());
     placeStartLine();
-    publishLap();
-    saveLap({ trigger, anchored, warmUp ? SDK::Fit::Intensity::Warmup : SDK::Fit::Intensity::Active });
-    SDK::send_msg<CustomMessage::LapEnded>(mKernel, mTrackData.lapNum);
+    const Track::Lap lap =
+        saveLap({ trigger, anchored, warmUp ? SDK::Fit::Intensity::Warmup : SDK::Fit::Intensity::Active });
+    SDK::send_msg<CustomMessage::LapEnded>(mKernel, lap);
     notifyLapEnd();
 }
 
@@ -576,14 +576,6 @@ void Service::detectAutoLap()
     if (mStartLine.update(mGps.latitude, mGps.longitude, armed)) {
         completeLap(ActivityWriter::LapTrigger::Gps);
     }
-}
-
-void Service::publishLap()
-{
-    mTrackData.lapDistance = mDistanceCounter.getLapValueActive();
-    mTrackData.avgLapSpeed = speedFromTotals(mTrackData.lapDistance, static_cast<float>(mTrackData.lapTime));
-    mTrackData.lapPace     = getPace(mTrackData.avgLapSpeed, mSpeedCounter.getMinValid());
-    SDK::send_msg<CustomMessage::TrackDataUpd>(mKernel, mTrackData);
 }
 
 float Service::rawDistanceM() const
@@ -1008,18 +1000,14 @@ void Service::processTrack()
     }
 }
 
-void Service::saveLap(const LapEnd& end)
+Track::Lap Service::saveLap(const LapEnd& end)
 {
     const auto  lapTime     = mTimeCounter.getLapValueActive();
     const float lapDistance = mDistanceCounter.getLapValueActive();
     const float lapSpeed    = speedFromTotals(lapDistance, static_cast<float>(lapTime));
 
-    // Accumulate lap into summary
-    mSummary.laps.push_back({
-        lapTime,
-        lapDistance,
-        getPace(lapSpeed, mSpeedCounter.getMinValid())
-    });
+    const float lapPace = getPace(lapSpeed, mSpeedCounter.getMinValid());
+    mSummary.laps.push_back({ lapTime, lapDistance, lapPace });
 
     // Save lap to the FIT file
     ActivityWriter::LapData fitLap{};
@@ -1078,6 +1066,7 @@ void Service::saveLap(const LapEnd& end)
     mTrackData.maxLapHR = 0.0f;
 
     mLapNotEmpty = false;
+    return { mTrackData.lapNum, lapDistance, lapTime, lapPace };
 }
 
 void Service::buildPartialSummary()

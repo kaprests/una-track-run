@@ -20,8 +20,8 @@ namespace Widgets
 
 // --- SensorStatusRow ---------------------------------------------------------
 
-SensorStatusRow::SensorStatusRow(lv_obj_t* parent, int32_t x, int32_t y, int32_t w, int32_t h, bool showGps)
-    : SDK::LVGL::SensorStatusRow(parent, x, y, w, h, showGps ? &img_sensorgpslight : nullptr, &img_sensorhrlight)
+SensorStatusRow::SensorStatusRow(lv_obj_t* parent, int32_t x, int32_t y, int32_t w, int32_t h)
+    : SDK::LVGL::SensorStatusRow(parent, x, y, w, h, &img_sensorgpslight, &img_sensorhrlight)
 {
 }
 

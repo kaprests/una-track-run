@@ -120,7 +120,7 @@ void TrackScreen::buildFaceLap()
 void TrackScreen::buildFaceStatus()
 {
     lv_obj_t* f = mFaceStatus = Theme::container(mRoot, 0, 0, 240, 240);
-    mSensorRow = std::make_unique<Widgets::SensorStatusRow>(f, 0, 20, 240, 24, mModel.usesGps());
+    mSensorRow = std::make_unique<Widgets::SensorStatusRow>(f, 0, 20, 240, 24);
     Theme::hline(f, 35, 62, 170);
     // Digits and AM/PM are sized to their text and centred as a group in setTime().
     mDayTime = Theme::label(f, F::SemiBold60, "--:--", 0, kTimeY, LV_SIZE_CONTENT, LV_TEXT_ALIGN_LEFT);
@@ -203,7 +203,7 @@ void TrackScreen::onKey(uint8_t code)
             ScreenManager::instance().goTo(ScreenId::TrackAction);
             break;
         case Btn::R2:
-            // The lap popup opens once the service confirms the lap (onLapChanged).
+            // The lap popup opens once the service confirms the lap (onLapEnded).
             if (mIntervalsMode) {
                 mModel.intervalsNextPhase();
             } else {
@@ -321,7 +321,7 @@ void TrackScreen::setTime(uint8_t h, uint8_t m)
     }
 }
 
-void TrackScreen::onLapChanged(uint8_t /*lapEnd*/)
+void TrackScreen::onLapEnded()
 {
     ScreenManager::instance().goTo(ScreenId::TrackLap);
 }
@@ -338,7 +338,7 @@ void TrackScreen::onIntervalsWorkoutCompleted()
 
 void TrackScreen::onGpsFix(bool acquired)
 {
-    mSensorRow->setGps(Widgets::SensorStatusRow::gpsState(acquired));
+    mSensorRow->setGps(Widgets::SensorStatusRow::gpsState(mModel.usesGps(), acquired));
 }
 
 void TrackScreen::onAccessoryStatus(uint8_t state, const char* /*name*/)
