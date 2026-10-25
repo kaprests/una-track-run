@@ -33,11 +33,14 @@ protected:
 
 private:
     using Menu = App::MenuNav::Root::Settings;
+    static constexpr size_t kTipSize = 12;
 
-    void activate(uint16_t item);
+    void activate(uint16_t id);
 
     WheelMenu::Item mItems[Menu::ID_COUNT] {};
-    char mTips[Menu::ID_COUNT][12] {};
+    uint16_t        mIds[Menu::ID_COUNT] {};   ///< menu id of each visible item
+    uint16_t        mCount = 0;
+    char            mTips[Menu::ID_COUNT][kTipSize] {};
 
     std::unique_ptr<Widgets::Title>           mTitle;
     std::unique_ptr<Widgets::SensorStatusRow> mSensorRow;

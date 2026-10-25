@@ -33,6 +33,9 @@ namespace {
         fit::field::Record::StepLength,
         fit::field::Record::Distance,
     };
+
+    // lap.intensity (FIT profile field 23); the SDK profile does not list it.
+    constexpr Field kLapIntensity{23, fit::BaseType::Enum};
 }  // namespace
 
 ActivityWriter::ActivityWriter(const SDK::Kernel& kernel, const char* pathToDir)
@@ -92,6 +95,7 @@ void ActivityWriter::start(const AppInfo& info)
     writeFieldDescription(DF_PACE_K, "pace_k", nullptr, fit::BaseType::Float32);
     writeFieldDescription(DF_LAP_ANCHORED, "lap_anchored", nullptr, fit::BaseType::UInt8);
     writeFieldDescription(DF_DISTANCE_MODEL, "distance_model", "m", fit::BaseType::UInt32);
+    writeFieldDescription(DF_LAP_TRIGGER, "lap_trigger", nullptr, fit::BaseType::UInt8);
 
     // event
     mFit->defineMessage(L_EVENT, fit::mesgNum(fit::MesgNum::Event),
@@ -107,8 +111,8 @@ void ActivityWriter::start(const AppInfo& info)
          fit::field::Lap::TotalDistance, fit::field::Lap::MessageIndex,
          fit::field::Lap::AvgSpeed, fit::field::Lap::MaxSpeed,
          fit::field::Lap::AvgHeartRate, fit::field::Lap::MaxHeartRate,
-         fit::field::Lap::WktStepIndex},
-        {{DF_LAP_ANCHORED, 1, 0}});
+         fit::field::Lap::WktStepIndex, kLapIntensity},
+        {{DF_LAP_ANCHORED, 1, 0}, {DF_LAP_TRIGGER, 1, 0}});
     mFit->defineMessage(L_SESSION, fit::mesgNum(fit::MesgNum::Session),
         {fit::field::Session::Timestamp, fit::field::Session::StartTime,
          fit::field::Session::TotalElapsedTime, fit::field::Session::TotalTimerTime,
@@ -294,7 +298,9 @@ void ActivityWriter::addLap(const LapData& lap)
         .u8(static_cast<uint8_t>(lap.hrAvg))
         .u8(static_cast<uint8_t>(lap.hrMax))
         .u16(lap.wktStepIndex)
+        .u8(static_cast<uint8_t>(lap.intensity))
         .u8(lap.anchored ? 1 : 0)
+        .u8(static_cast<uint8_t>(lap.trigger))
         .write();
     mLapCounter++;
 

@@ -80,6 +80,7 @@ Service::Service(SDK::Kernel &kernel)
 {
     mTimeCounter.init();
     mDistanceCounter.init();
+    mGpsDistance.init();
     mSpeedCounter.init(0.5f, 300.0f);
     mSpeedSmoother.init(0.5f, 300.0f);  // same valid range as the raw counter
     mHrCounter.init(20.0f, 300.0f);
@@ -342,19 +343,13 @@ void Service::handleSensorsData(uint16_t handle, SDK::Sensor::DataBatch& data)
             mGpsSpeedValid    = parser.isSpeedValid();
             mGpsDeadReckoning = parser.isDeadReckoning();
             mGpsSpeedFresh    = true;   // consumed by the pace smoother each tick
-            // Only feed a current (valid-fix) speed into the aggregated metrics
-            // so acquisition / fix-loss / dead-reckoning readings don't inflate
-            // the max-speed statistics.
-            if (mGpsSpeedValid) {
-                mSpeedCounter.add(mGpsSpeedMs);
-            }
             LOG_DEBUG("Speed:    %.2f m/s (valid %u, dr %u)\n",
                       mGpsSpeedMs, mGpsSpeedValid, mGpsDeadReckoning);
         }
     } else if (mSensorGpsDistance.matchesDriver(handle)) {
         SDK::SensorDataParser::GpsDistance parser(data[0]);
         if (parser.isDataValid()) {
-            mDistanceCounter.add(parser.getDistance());
+            mGpsDistance.add(parser.getDistance());
             LOG_DEBUG("Distance: %.2f m\n", parser.getDistance());
         }
     } else if (mSensorHr.matchesDriver(handle)) {
@@ -430,26 +425,27 @@ void Service::onStartGUI()
 
     setCapabilities();
     requestAccessoryPrepare();   // pre-warm external HR while on the pre-activity screen
-
-    if (usesGps()) {
-        // GPS stays wanted from the pre-activity screen until the activity ends
-        // (cleared in disconnect()), so the run() loop keeps it connected during the
-        // activity but never re-wakes the GNSS on the post-activity summary screen.
-        mGpsWanted = true;
-
-        // Subscribe to GPS to get fix. If this first attempt loses the ~100 ms
-        // startup ack race, the run() loop retries; track the outcome so the retry
-        // logs the recovery (and field logs reveal how often the race fires).
-        connectGps();
-        mGpsInitialConnectFailed = !mSensorGpsLocation.isConnected();
-        if (mGpsInitialConnectFailed) {
-            LOG_WARNING("GPS location subscribe lost the startup race; will retry\n");
-        }
-    }
-
+    applyMode();
     mSensorWristMotion.connect();
 
     sendInitialInfoToGui();
+}
+
+void Service::applyMode()
+{
+    // GPS stays wanted from the pre-activity screen until the activity ends
+    // (cleared in disconnect()), so the run() loop keeps it connected and retries
+    // a subscribe that lost the startup ack race.
+    mGpsWanted = usesGps();
+    if (!mGpsWanted) {
+        mSensorGpsLocation.disconnect();
+        return;
+    }
+    connectGps();
+    mGpsInitialConnectFailed = !mSensorGpsLocation.isConnected();
+    if (mGpsInitialConnectFailed) {
+        LOG_WARNING("GPS location subscribe lost the startup race; will retry\n");
+    }
 }
 
 void Service::onStopGUI()
@@ -478,12 +474,16 @@ void Service::handleEvent(const CustomMessage::TrackStop& event)
 
 void Service::handleEvent(const CustomMessage::SettingsSave& event)
 {
-    bool updCaps = mSettings.phoneNotifEn != event.settings.phoneNotifEn;
+    const bool updCaps = mSettings.phoneNotifEn != event.settings.phoneNotifEn;
+    const bool updMode = mSettings.mode != event.settings.mode;
     mSettings = event.settings;
     mSettingsSerializer.save(event.settings);
 
     if (updCaps) {
         setCapabilities();
+    }
+    if (updMode && mTrackState == Track::State::INACTIVE) {
+        applyMode();
     }
 }
 
@@ -499,25 +499,29 @@ void Service::handleEvent(const CustomMessage::TrackResume& /*event*/)
 
 void Service::handleEvent(const CustomMessage::ManualLap& /*event*/)
 {
-    if (usesGps()) {
-        saveLap(false);
-    } else {
-        if (isEarlyPress()) {
-            rejectPress();
-            return;
-        }
-        const bool anchored = endSegment().has_value();
-        mDistance.beginSegment(lapSegment());
-        publishLap();
-        saveLap(anchored);
+    if (isEarlyPress()) {
+        rejectPress();
+        return;
     }
+    completeLap(ActivityWriter::LapTrigger::Press);
+}
+
+void Service::completeLap(ActivityWriter::LapTrigger trigger)
+{
+    const bool warmUp   = mInWarmUp;
+    const bool anchored = endSegment().has_value();
+    mInWarmUp = false;
+    mDistance.beginSegment(lapSegment());
+    placeStartLine();
+    publishLap();
+    saveLap({ trigger, anchored, warmUp ? SDK::Fit::Intensity::Warmup : SDK::Fit::Intensity::Active });
     SDK::send_msg<CustomMessage::LapEnded>(mKernel, mTrackData.lapNum);
     notifyLapEnd();
 }
 
 std::optional<float> Service::endSegment()
 {
-    const float       rawTotalM   = mEstimator.distanceM();
+    const float       rawTotalM   = rawDistanceM();
     const float       rawSegmentM = mDistance.rawSegmentM(rawTotalM);
     const std::time_t activeSec   = mTimeCounter.getValueActive();
 
@@ -533,16 +537,13 @@ std::optional<float> Service::endSegment()
 
 std::optional<TrackDistance::Segment> Service::lapSegment() const
 {
-    if (usesGps()) {
-        return std::nullopt;
-    }
     return TrackDistance::Segment{ mSettings.laneLapLengthM(), TrackDistance::Segment::Kind::Lap };
 }
 
 bool Service::isEarlyPress() const
 {
-    return !usesGps() && mSettings.earlyPressGuardEn &&
-           mDistance.isEarlyPress(mEstimator.distanceM(), mCorrector.k(), mSettings.earlyPressFraction());
+    return mSettings.earlyPressGuardEn &&
+           mDistance.isEarlyPress(rawDistanceM(), mCorrector.k(), mSettings.earlyPressFraction());
 }
 
 void Service::rejectPress()
@@ -552,12 +553,28 @@ void Service::rejectPress()
 
 void Service::remindOfMark()
 {
-    const float rawTotalM = mEstimator.distanceM();
+    const float rawTotalM = rawDistanceM();
     const auto  mark      = mDistance.markM(rawTotalM, mCorrector.k());
     const auto  left      = mDistance.toMarkM(rawTotalM, mCorrector.k());
     if (mSettings.lapReminderEn && left && *left <= skReminderDistanceM && mark != mRemindedMarkM) {
         mRemindedMarkM = mark;
         playVibroPattern(SDK::Message::RequestVibroPlay::Effect::STRONG_CLICK_100);
+    }
+}
+
+void Service::placeStartLine()
+{
+    if (usesGps() && mGps.fix && !mStartLine.isSet()) {
+        mStartLine.set(mGps.latitude, mGps.longitude);
+    }
+}
+
+void Service::detectAutoLap()
+{
+    const bool armed = usesGps() && mSettings.autoLapEn && mGps.fix && !mInWarmUp && !mIntervalsMode &&
+                       !mDistance.isEarlyPress(rawDistanceM(), mCorrector.k(), skAutoLapMinFraction);
+    if (mStartLine.update(mGps.latitude, mGps.longitude, armed)) {
+        completeLap(ActivityWriter::LapTrigger::Gps);
     }
 }
 
@@ -567,6 +584,25 @@ void Service::publishLap()
     mTrackData.avgLapSpeed = speedFromTotals(mTrackData.lapDistance, static_cast<float>(mTrackData.lapTime));
     mTrackData.lapPace     = getPace(mTrackData.avgLapSpeed, mSpeedCounter.getMinValid());
     SDK::send_msg<CustomMessage::TrackDataUpd>(mKernel, mTrackData);
+}
+
+float Service::rawDistanceM() const
+{
+    return mSettings.paceFromGps() ? mGpsDistance.getValueActive() : mEstimator.distanceM();
+}
+
+float Service::rawSpeedMps() const
+{
+    return mSettings.paceFromGps() ? mSpeedSmoother.getSpeed() : mEstimator.speedMps();
+}
+
+CalibrationStore::Key Service::calibrationKey() const
+{
+    using Source = CalibrationStore::Source;
+    const Source source = !usesGps()                ? Source::IndoorCadence
+                        : mSettings.paceFromGps()   ? Source::OutdoorGps
+                                                    : Source::OutdoorCadence;
+    return { mSettings.lapLengthM, mSettings.lane, source };
 }
 
 void Service::setCapabilities()
@@ -717,7 +753,7 @@ ActivityWriter::RecordData Service::prepareRecordData()
 
     fitRecord.set(ActivityWriter::RecordData::Field::DISTANCE);
     fitRecord.distance     = mDistanceCounter.getValueActive();
-    fitRecord.paceK        = usesGps() ? 1.0f : mCorrector.k();
+    fitRecord.paceK        = mCorrector.k();
 
     bool hasHeartRate = (mHrCounter.getCurrent() > 20 && mTrackData.hrTrustLevel >= 1 && mTrackData.hrTrustLevel <= 3);
     fitRecord.set(ActivityWriter::RecordData::Field::HEART_RATE, hasHeartRate);
@@ -742,9 +778,8 @@ ActivityWriter::RecordData Service::prepareRecordData()
     fitRecord.set(ActivityWriter::RecordData::Field::CADENCE, mRunningCadence.cadenceValid);
     fitRecord.cadenceSpm = mRunningCadence.cadenceSpm;
 
-    // Single-step distance: from the stride model indoors, implied by GPS speed
-    // and cadence outdoors.
-    if (usesGps()) {
+    // Single-step distance from the same source as the pace.
+    if (mSettings.paceFromGps()) {
         const SDK::Calibration::StrideMath::StepLength stepLen =
             SDK::Calibration::StrideMath::impliedStepLengthM(
                 mGpsSpeedMs, mGpsSpeedValid && !mGpsDeadReckoning,
@@ -820,21 +855,30 @@ void Service::startTrack(std::time_t utc)
     mHrExternalBpm = 0;
     mBatterySoc.reset(skBatteryLogPeriodMs);
     mBatteryVoltage.reset(skBatteryLogPeriodMs);
+
+    // Measured laps begin at Start unless a warm-up lap comes first; outdoors
+    // the start line goes where they begin, so it is placed before the fix resets.
+    mInWarmUp = mSettings.warmUpLapEn && !mIntervalsMode;
+    mStartLine.clear();
+    if (!mInWarmUp && !mIntervalsMode) {
+        placeStartLine();
+    }
     mGps.reset();
     mRunningCadence = {};
 
     mGpsSpeedValid    = false;
     mGpsSpeedFresh    = false;
     mGpsDeadReckoning = false;
+    mGpsDistance.reset();
 
     mModel.startSession(mHeightM);
     mEstimator.startSession();
     mLastTickUtc = 0;
 
     mCalibrationStore.load();
-    mCorrector             = SegmentCorrector(mCalibrationStore.prior(mSettings.lapLengthM, mSettings.lane));
+    mCorrector             = SegmentCorrector(mCalibrationStore.prior(calibrationKey()));
     mDistance              = TrackDistance(mSettings.missedLapFraction());
-    mDistance.beginSegment(lapSegment());
+    mDistance.beginSegment(mInWarmUp ? std::nullopt : lapSegment());
     mSegmentStartActiveSec = 0;
     mRemindedMarkM         = std::nullopt;
     mAnchoredThisSession   = false;
@@ -894,15 +938,19 @@ void Service::processTrack()
     // (processTrack) so it never re-powers sensors after the track ends.
     connectSensors();
 
-    if (!usesGps() && mTrackState == Track::State::ACTIVE) {
+    if (mTrackState == Track::State::ACTIVE) {
         const std::time_t nowUtc = mTimeCounter.getCurrent();
         const float dt = (mLastTickUtc == 0) ? 1.0f : static_cast<float>(nowUtc - mLastTickUtc);
         mLastTickUtc = nowUtc;
 
+        // The GPS speed is a rolling mean, advanced once per active tick so a lost fix ages out.
         mEstimator.tick(mRunningCadence.cadenceSpm, mRunningCadence.cadenceValid, dt);
+        mSpeedSmoother.tick(mGpsSpeedMs, mGpsSpeedValid && mGpsSpeedFresh);
+        mGpsSpeedFresh = false;
+
         mCorrector.drift(dt);
-        mDistanceCounter.add(mDistance.total(mEstimator.distanceM(), mCorrector.k()));
-        mSpeedCounter.add(mCorrector.k() * mEstimator.speedMps());
+        mDistanceCounter.add(mDistance.total(rawDistanceM(), mCorrector.k()));
+        mSpeedCounter.add(mCorrector.k() * rawSpeedMps());
         remindOfMark();
     }
 
@@ -914,19 +962,8 @@ void Service::processTrack()
     mTrackData.distance = mDistanceCounter.getValueActive();
     mTrackData.lapDistance = mDistanceCounter.getLapValueActive();
 
-    // Outdoors the live speed is a rolling mean of the GPS speed, advanced once
-    // per active tick so a lost fix ages out and a pause freezes the readout.
-    if (usesGps()) {
-        if (mTrackState == Track::State::ACTIVE) {
-            mSpeedSmoother.tick(mGpsSpeedMs, mGpsSpeedValid && mGpsSpeedFresh);
-            mGpsSpeedFresh = false;
-        }
-        mTrackData.speed = mSpeedSmoother.getSpeed();
-        mTrackData.pace  = mSpeedSmoother.getPace();
-    } else {
-        mTrackData.speed = mSpeedCounter.getCurrent();
-        mTrackData.pace  = getPace(mTrackData.speed, mSpeedCounter.getMinValid());
-    }
+    mTrackData.speed = mSpeedCounter.getCurrent();
+    mTrackData.pace  = getPace(mTrackData.speed, mSpeedCounter.getMinValid());
 
     mTrackData.avgSpeed    = speedFromTotals(mTrackData.distance, mTrackData.totalTime);
     mTrackData.maxSpeed    = mSpeedCounter.getMaximum();
@@ -965,10 +1002,13 @@ void Service::processTrack()
 
         mSessionNotEmpty = true;    // Session has at least one record
         mLapNotEmpty = true;        // Lap has at least one record
+
+        // Last, so the lap popup's snapshot is the final one this tick.
+        detectAutoLap();
     }
 }
 
-void Service::saveLap(bool anchored)
+void Service::saveLap(const LapEnd& end)
 {
     const auto  lapTime     = mTimeCounter.getLapValueActive();
     const float lapDistance = mDistanceCounter.getLapValueActive();
@@ -1005,7 +1045,9 @@ void Service::saveLap(bool anchored)
 
     fitLap.hrAvg     = mHrCounter.getLapAverage();
     fitLap.hrMax     = mHrCounter.getLapMaximum();
-    fitLap.anchored  = anchored;
+    fitLap.anchored  = end.anchored;
+    fitLap.trigger   = end.trigger;
+    fitLap.intensity = end.intensity;
 
     // Link this lap to its workout_step (intervals only; left INVALID otherwise).
     if (mIntervalsMode && mIntervalsStepMap.valid) {
@@ -1064,7 +1106,10 @@ void Service::stopTrack(bool discard)
         }
 
         if (mLapNotEmpty) {
-            saveLap(false);
+            saveLap({ ActivityWriter::LapTrigger::Stop, false,
+                      mIntervalsMode ? phaseIntensity()
+                    : mInWarmUp      ? SDK::Fit::Intensity::Warmup
+                                     : SDK::Fit::Intensity::Active });
         }
 
         // No final record: the activity ends at the pause instant below, so a
@@ -1098,7 +1143,7 @@ void Service::stopTrack(bool discard)
 
         fitTrack.hrAvg     = mHrCounter.getAverage();
         fitTrack.hrMax     = mHrCounter.getMaximum();
-        fitTrack.distanceModelM = usesGps() ? fitTrack.distance : mEstimator.distanceM();
+        fitTrack.distanceModelM = rawDistanceM();
 
         if (mActivityWriter.stop(fitTrack)) {
             notifyNewActivity();
@@ -1121,7 +1166,7 @@ void Service::stopTrack(bool discard)
     SDK::send_msg<CustomMessage::TrackStateUpd>(mKernel, mTrackState);
 
     if (!discard && mAnchoredThisSession) {
-        mCalibrationStore.remember(mSettings.lapLengthM, mSettings.lane, mCorrector.state());
+        mCalibrationStore.remember(calibrationKey(), mCorrector.state());
         if (!mCalibrationStore.save()) {
             LOG_ERROR("Can't save track calibration\n");
         }
@@ -1141,6 +1186,7 @@ void Service::pauseTrack(bool pause)
         mDistanceCounter.pause();
         mSpeedCounter.pause();
         mEstimator.pause();
+        mGpsDistance.pause();
         mHrCounter.pause();
 
         mActivityWriter.pause(mTimeCounter.getCurrent());
@@ -1156,6 +1202,7 @@ void Service::pauseTrack(bool pause)
         mDistanceCounter.resume();
         mSpeedCounter.resume();
         mEstimator.resume();
+        mGpsDistance.resume();
         mLastTickUtc = 0;
         // Drop the pre-pause window: those samples describe the effort before
         // the break, so blending them into the resumed readout would be wrong.
@@ -1420,9 +1467,7 @@ void Service::processIntervals()
             : cfg.restDistance;
         const float done = mDistanceCounter.getValueActive() - mPhaseStartActiveDist;
         iv.distRemaining = (done < target) ? (target - done) : 0.0f;
-        if (usesGps()) {
-            autoAdvance = (done >= target);
-        } else if (done >= target) {
+        if (done >= target) {
             promptPhaseEnd();
         }
         break;
@@ -1437,7 +1482,7 @@ void Service::processIntervals()
 std::optional<TrackDistance::Segment> Service::phaseSegment() const
 {
     const Track::IntervalsData& iv = mTrackData.intervals;
-    if (usesGps() || iv.metric != Track::IntervalsMetric::DISTANCE) {
+    if (iv.metric != Track::IntervalsMetric::DISTANCE) {
         return std::nullopt;
     }
     const float lengthM = iv.phase == Track::IntervalsPhase::RUN ? mSettings.intervals.runDistance
@@ -1445,12 +1490,24 @@ std::optional<TrackDistance::Segment> Service::phaseSegment() const
     return TrackDistance::Segment{ lengthM, TrackDistance::Segment::Kind::Rep };
 }
 
-void Service::closeIntervalsPhase()
+void Service::closeIntervalsPhase(bool manual)
 {
-    const bool anchored = !usesGps() && endSegment().has_value();
+    const SDK::Fit::Intensity intensity = phaseIntensity();
+    const bool                anchored  = endSegment().has_value();
     if (mLapNotEmpty) {
-        saveLap(anchored);
+        saveLap({ manual ? ActivityWriter::LapTrigger::Press : ActivityWriter::LapTrigger::Auto, anchored, intensity });
     }
+}
+
+SDK::Fit::Intensity Service::phaseIntensity() const
+{
+    switch (mTrackData.intervals.phase) {
+        case Track::IntervalsPhase::WARM_UP:   return SDK::Fit::Intensity::Warmup;
+        case Track::IntervalsPhase::REST:      return SDK::Fit::Intensity::Rest;
+        case Track::IntervalsPhase::COOL_DOWN: return SDK::Fit::Intensity::Cooldown;
+        case Track::IntervalsPhase::RUN:       break;
+    }
+    return SDK::Fit::Intensity::Active;
 }
 
 void Service::promptPhaseEnd()
@@ -1522,7 +1579,7 @@ void Service::advanceIntervalsPhase(bool manual)
         // user can record additional manual laps and end it themselves. Close the
         // final phase as a lap, then drop out of intervals mode so the track
         // screen reverts to normal faces and R2 records a lap (not a phase advance).
-        closeIntervalsPhase();
+        closeIntervalsPhase(manual);
         mDistance.beginSegment(lapSegment());
         mIntervalsCompleted = true;
         mIntervalsMode = false;
@@ -1537,7 +1594,7 @@ void Service::advanceIntervalsPhase(bool manual)
 
     // Record the phase that just finished as its own lap before the next one
     // begins. The final phase is captured by stopTrack() when the workout ends.
-    closeIntervalsPhase();
+    closeIntervalsPhase(manual);
 
     startIntervalsPhase(nextPhase);
 

@@ -108,9 +108,10 @@ struct Root {
 
     struct Settings {
         enum Id {
-            ID_LAP_LENGTH = 0, ID_LANE, ID_LANE_WIDTH, ID_LAP_REMINDER,
+            ID_MODE = 0, ID_PACE_SOURCE, ID_AUTO_LAP, ID_WARM_UP,
+            ID_LAP_LENGTH, ID_LANE, ID_LANE_WIDTH, ID_LAP_REMINDER,
             ID_MISSED_LAP, ID_EARLY_GUARD, ID_EARLY_MIN, ID_PHONE_NOTIF,
-            ID_COUNT, ID_DEFAULT = ID_LAP_LENGTH
+            ID_COUNT, ID_DEFAULT = ID_MODE
         };
     };
 };

@@ -13,8 +13,8 @@
 
 #include <iostream>
 
-// GPS sensor: unused in indoor mode.
-#define GSP_SIM_ENABLE               0  // 1 - Enable
+// GPS sensor: the runner circles a 400 m track at a speed between MIN and MAX.
+#define GSP_SIM_ENABLE               1  // 0 - Disable
 #define GSP_SIM_SPEED_MIN            15 // km/h
 #define GPS_SIM_SPEED_BASE           20 // km/h
 #define GPS_SIM_SPEED_MAX            25 // km/h

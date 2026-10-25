@@ -11,6 +11,7 @@ set(LIBS ${CMAKE_CURRENT_LIST_DIR}/../Libs)
 
 add_executable(trackrun-host-tests
     SegmentCorrector_test.cpp
+    StartLine_test.cpp
     TrackDistance_test.cpp
     ${LIBS}/Sources/SegmentCorrector.cpp
 )

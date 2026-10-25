@@ -73,6 +73,9 @@ public:
         uint8_t mFlags = 0;
     };
 
+    /// What ended a lap; written as the lap_trigger developer field.
+    enum class LapTrigger : uint8_t { Press = 0, Gps = 1, Stop = 2, Auto = 3 };
+
     struct LapData {
         std::time_t timestamp = 0;      // UTC
         std::time_t timeStart = 0;      // UTC
@@ -84,6 +87,8 @@ public:
         float       hrAvg     = 0.0f;   // bpm
         float       hrMax     = 0.0f;   // bpm
         bool        anchored  = false;  // the lap's known length corrected the pace
+        LapTrigger          trigger   = LapTrigger::Press;
+        SDK::Fit::Intensity intensity = SDK::Fit::Intensity::Active;
         // workout_step this lap belongs to (kMessageIndexInvalid = none)
         uint16_t    wktStepIndex = SDK::Fit::kMessageIndexInvalid;
     };
@@ -170,6 +175,7 @@ private:
         DF_PACE_K          = 7,   ///< record: correction factor applied to the model
         DF_LAP_ANCHORED    = 8,   ///< lap: its length corrected the pace
         DF_DISTANCE_MODEL  = 9,   ///< session: distance of the uncorrected model
+        DF_LAP_TRIGGER     = 10,  ///< lap: what ended it (LapTrigger)
     };
 
     /// Flush + marker-refresh cadence during recording (seconds of record time).

@@ -1,17 +1,21 @@
 # TrackRun
 
-Live pace and distance for indoor track runs on the UNA Watch, where there is no GPS.
+Live pace and distance on a running track, indoors without GPS or outdoors with it.
 
-Pace is cadence times a stride length from the personal model the Running app builds
-outdoors (`SharedData/stride.json`, read only). Every lap, or distance interval, of known
-length corrects the model, so the pace follows the shoes, the fatigue and the bends of the day.
-The correction is kept per track (lap length and lane) in the app's own `track_calib.json`.
+Pace comes from the selected source: cadence times a stride length from the personal model
+the Running app builds outdoors (`SharedData/stride.json`, read only), or GPS outdoors.
+Every lap, or distance interval, of known length corrects that source, so the pace follows
+the shoes, the fatigue, the bends and the GPS error of the day. The correction is kept per
+track (lap length, lane and source) in the app's own `track_calib.json`.
 
-- Lap length, lane and lane width are set in Settings. Lane 1 is the inner lane.
-- R2 ends a lap. In an interval workout it ends the phase, and a distance phase is
-  measured against its set distance.
+- Mode (Indoor/Outdoor), pace source, lap length, lane and lane width are set in Settings.
+  Lane 1 is the inner lane.
+- R2 ends a lap. Outdoors, a lap is also counted when GPS passes the start line, which is
+  set at Start, or at the first press when the warm-up lap is on.
+- In an interval workout R2 ends the phase, and a distance phase is measured against its
+  set distance.
 - The activity is saved as a running/track FIT file with the correction as developer fields
-  (`pace_k`, `lap_anchored`, `distance_model`).
+  (`pace_k`, `lap_anchored`, `lap_trigger`, `distance_model`).
 
 See `idea.md` for the idea and its open questions.
 

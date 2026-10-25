@@ -106,7 +106,7 @@ void Model::saveSettings(const Settings& sett)
 // GPS
 bool Model::usesGps() const
 {
-    return mSettings.mode == Settings::Mode::Outdoor;
+    return mSettings.usesGps();
 }
 
 bool Model::hasGpsFix() const

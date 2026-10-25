@@ -19,10 +19,16 @@
  */
 struct Settings {
     /// Settings version.
-    static constexpr uint8_t kVersion = 3;
+    static constexpr uint8_t kVersion = 4;
 
     /// Indoor: no GPS, pace from cadence. Outdoor: GPS is connected as well.
     enum class Mode : uint8_t { Indoor, Outdoor };
+
+    /// Where the raw distance and pace come from outdoors; indoors it is always the cadence model.
+    enum class PaceSource : uint8_t { Gps, Cadence };
+
+    static constexpr float kIndoorLapLengthM  = 200.0f;
+    static constexpr float kOutdoorLapLengthM = 400.0f;
 
     /// Ranges of the track settings.
     struct Limits {
@@ -81,7 +87,10 @@ struct Settings {
     bool     phoneNotifEn      = true;          ///< Phone notifications while the app runs.
 
     Mode     mode              = Mode::Indoor;
-    float    lapLengthM        = 200.0f;        ///< Length of the inner lane.
+    PaceSource paceSource      = PaceSource::Gps;
+    bool     autoLapEn         = true;          ///< Outdoors, count a lap when GPS passes the start line.
+    bool     warmUpLapEn       = false;         ///< The first press ends a warm-up lap and starts the measured laps.
+    float    lapLengthM        = kIndoorLapLengthM; ///< Length of the inner lane.
     uint8_t  lane              = 1;             ///< Lane run in; 1 is the inner lane.
     float    laneWidthM        = 1.0f;
 
@@ -101,6 +110,18 @@ struct Settings {
 
     float missedLapFraction() const  { return static_cast<float>(missedLapPct) / 100.0f; }
     float earlyPressFraction() const { return static_cast<float>(earlyPressPct) / 100.0f; }
+
+    bool usesGps() const      { return mode == Mode::Outdoor; }
+    bool paceFromGps() const  { return usesGps() && paceSource == PaceSource::Gps; }
+
+    /// Switches mode and moves the lap length to the mode's usual track.
+    void setMode(Mode next)
+    {
+        if (next != mode) {
+            mode       = next;
+            lapLengthM = next == Mode::Outdoor ? kOutdoorLapLengthM : kIndoorLapLengthM;
+        }
+    }
 };
 
 #endif // SETTINGS_HPP

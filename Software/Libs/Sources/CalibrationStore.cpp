@@ -1,6 +1,7 @@
 #include "CalibrationStore.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cinttypes>
 #include <cmath>
 #include <memory>
@@ -34,21 +35,23 @@ bool CalibrationStore::load()
     uint32_t count = 0;
     reader.get("count", count);
     for (uint32_t i = 0; i < std::min<uint32_t>(count, kCapacity); ++i) {
-        char query[32];
-        Entry entry{};
-        uint8_t lane = 0;
+        const auto field = [i](const char* name) {
+            std::array<char, 40> query{};
+            snprintf(query.data(), query.size(), "entries[%" PRIu32 "].%s", i, name);
+            return query;
+        };
+        Entry   entry{};
+        uint8_t source = static_cast<uint8_t>(Source::IndoorCadence);
+        reader.get(field("lap_m").data(),  entry.key.lapLengthM);
+        reader.get(field("lane").data(),   entry.key.lane);
+        reader.get(field("source").data(), source);
+        reader.get(field("k").data(),      entry.state.k);
+        reader.get(field("var").data(),    entry.state.variance);
 
-        snprintf(query, sizeof(query), "entries[%" PRIu32 "].lap_m", i);
-        reader.get(query, entry.lapLengthM);
-        snprintf(query, sizeof(query), "entries[%" PRIu32 "].lane", i);
-        reader.get(query, lane);
-        snprintf(query, sizeof(query), "entries[%" PRIu32 "].k", i);
-        reader.get(query, entry.state.k);
-        snprintf(query, sizeof(query), "entries[%" PRIu32 "].var", i);
-        reader.get(query, entry.state.variance);
-
-        entry.lane = lane;
-        mEntries.push_back(entry);
+        if (source <= static_cast<uint8_t>(Source::OutdoorGps)) {
+            entry.key.source = static_cast<Source>(source);
+            mEntries.push_back(entry);
+        }
     }
     return true;
 }
@@ -66,10 +69,11 @@ bool CalibrationStore::save() const
     writer.startArray("entries");
     for (const Entry& entry : mEntries) {
         writer.startMap();
-        writer.add("lap_m", entry.lapLengthM);
-        writer.add("lane",  entry.lane);
-        writer.add("k",     entry.state.k);
-        writer.add("var",   entry.state.variance);
+        writer.add("lap_m",  entry.key.lapLengthM);
+        writer.add("lane",   entry.key.lane);
+        writer.add("source", static_cast<uint8_t>(entry.key.source));
+        writer.add("k",      entry.state.k);
+        writer.add("var",    entry.state.variance);
         writer.endMap();
     }
     writer.endArray();
@@ -79,29 +83,30 @@ bool CalibrationStore::save() const
     return file->close() && flushed;
 }
 
-SegmentCorrector::State CalibrationStore::prior(float lapLengthM, uint8_t lane) const
+SegmentCorrector::State CalibrationStore::prior(const Key& key) const
 {
-    const auto entry = find(lapLengthM, lane);
+    const auto entry = find(key);
     if (entry == mEntries.end()) {
         return {};
     }
     return { entry->state.k, std::max(entry->state.variance, kReturningVariance) };
 }
 
-void CalibrationStore::remember(float lapLengthM, uint8_t lane, SegmentCorrector::State state)
+void CalibrationStore::remember(const Key& key, SegmentCorrector::State state)
 {
-    const auto existing = find(lapLengthM, lane);
+    const auto existing = find(key);
     if (existing != mEntries.end()) {
         mEntries.erase(existing);
     } else if (mEntries.size() == kCapacity) {
         mEntries.erase(mEntries.begin());
     }
-    mEntries.push_back({ lapLengthM, lane, state });
+    mEntries.push_back({ key, state });
 }
 
-std::vector<CalibrationStore::Entry>::const_iterator CalibrationStore::find(float lapLengthM, uint8_t lane) const
+std::vector<CalibrationStore::Entry>::const_iterator CalibrationStore::find(const Key& key) const
 {
     return std::find_if(mEntries.begin(), mEntries.end(), [&](const Entry& e) {
-        return std::fabs(e.lapLengthM - lapLengthM) < 0.01f && e.lane == lane;
+        return std::fabs(e.key.lapLengthM - key.lapLengthM) < 0.01f && e.key.lane == key.lane &&
+               e.key.source == key.source;
     });
 }

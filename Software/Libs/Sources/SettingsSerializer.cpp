@@ -79,6 +79,9 @@ bool SettingsSerializer::save(const Settings &settings)
     writer.add("auto_pause_en",  settings.autoPauseEn);
     writer.add("phone_notif_en", settings.phoneNotifEn);
     writer.add("mode",           static_cast<uint8_t>(settings.mode));
+    writer.add("pace_source",    static_cast<uint8_t>(settings.paceSource));
+    writer.add("auto_lap_en",    settings.autoLapEn);
+    writer.add("warm_up_lap_en", settings.warmUpLapEn);
     writer.add("lap_length_m",   settings.lapLengthM);
     writer.add("lane",           settings.lane);
     writer.add("lane_width_m",   settings.laneWidthM);
@@ -168,6 +171,15 @@ bool SettingsSerializer::load(Settings &settings)
     settings.mode = mode <= static_cast<uint8_t>(Settings::Mode::Outdoor)
         ? static_cast<Settings::Mode>(mode)
         : Settings::Mode::Indoor;
+
+    uint8_t source = static_cast<uint8_t>(settings.paceSource);
+    reader.get("pace_source", source);
+    settings.paceSource = source <= static_cast<uint8_t>(Settings::PaceSource::Cadence)
+        ? static_cast<Settings::PaceSource>(source)
+        : Settings::PaceSource::Gps;
+
+    reader.get("auto_lap_en",    settings.autoLapEn);
+    reader.get("warm_up_lap_en", settings.warmUpLapEn);
 
     using L = Settings::Limits;
     reader.get("lap_length_m",         settings.lapLengthM);

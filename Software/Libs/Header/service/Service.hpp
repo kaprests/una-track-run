@@ -17,6 +17,7 @@
 
 #include "CalibrationStore.hpp"
 #include "SegmentCorrector.hpp"
+#include "StartLine.hpp"
 #include "TrackDistance.hpp"
 #include "SettingsSerializer.hpp"
 #include "ActivitySummarySerializer.hpp"
@@ -41,6 +42,7 @@ private:
     static constexpr uint32_t skSampleLatency        = 1000;
 
     static constexpr float    skReminderDistanceM        = 15.0f;
+    static constexpr float    skAutoLapMinFraction       = 0.8f;
     static constexpr uint32_t skPhaseEndPromptPeriodSec  = 10;
 
     static constexpr uint32_t skBatteryLogPeriodMs   = 5 * 60 * 1000;
@@ -97,13 +99,16 @@ private:
     std::time_t          mSegmentStartActiveSec = 0;
     std::optional<float> mRemindedMarkM;
     bool                 mAnchoredThisSession   = false;
+    bool                 mInWarmUp              = false;
+    StartLine            mStartLine;
 
-    // -- GPS speed (outdoor mode) ---------------------------------------------
+    // -- GPS speed and distance (outdoor mode) --------------------------------
 
     float       mGpsSpeedMs       = 0.0f; ///< Latest raw GPS speed (instantaneous source).
     bool        mGpsSpeedValid    = false;
     bool        mGpsSpeedFresh    = false; ///< A speed sample arrived since the last track tick.
     bool        mGpsDeadReckoning = false;
+    SDK::Metric::MonotonicCounter<float> mGpsDistance; ///< Active GPS distance, raw source outdoors.
 
     // -- Metrics --------------------------------------------------------------
 
@@ -197,23 +202,40 @@ private:
 
     // -- Track control --------------------------------------------------------
 
+    struct LapEnd {
+        ActivityWriter::LapTrigger trigger;
+        bool                       anchored  = false;
+        SDK::Fit::Intensity        intensity = SDK::Fit::Intensity::Active;
+    };
+
     void sendInitialInfoToGui();
     void startTrack(std::time_t utc);
     void processTrack();
-    void saveLap(bool anchored);
+    void saveLap(const LapEnd& end);
     /// Ends the current segment at its mark and corrects the pace with it. Returns the length it covered, when known.
     std::optional<float> endSegment();
+    /// Ends a free-run lap (or the warm-up lap) and starts the next one.
+    void completeLap(ActivityWriter::LapTrigger trigger);
     std::optional<TrackDistance::Segment> lapSegment() const;
     bool isEarlyPress() const;
     void rejectPress();
     void remindOfMark();
+    /// Outdoors: sets the start line where measured laps begin, if it is not set yet.
+    void placeStartLine();
+    void detectAutoLap();
     /// The lap popup reads the last snapshot, so refresh its lap fields before the lap is saved.
     void publishLap();
     void stopTrack(bool discard);
     void pauseTrack(bool pause);
     void buildPartialSummary();
     ActivityWriter::RecordData prepareRecordData();
-    bool usesGps() const { return mSettings.mode == Settings::Mode::Outdoor; }
+    void applyMode();
+
+    bool  usesGps() const { return mSettings.usesGps(); }
+    /// The uncorrected distance and speed of the selected source.
+    float rawDistanceM() const;
+    float rawSpeedMps() const;
+    CalibrationStore::Key calibrationKey() const;
 
     // -- Interval training ----------------------------------------------------
 
@@ -225,7 +247,8 @@ private:
     /// The segment of a set distance phase on a track, which ends on the runner's press.
     std::optional<TrackDistance::Segment> phaseSegment() const;
     /// Ends the phase as its own lap, anchoring the pace to the phase distance when it has one.
-    void closeIntervalsPhase();
+    void closeIntervalsPhase(bool manual);
+    SDK::Fit::Intensity phaseIntensity() const;
     /// Repeated prompt while a distance phase awaits the press.
     void promptPhaseEnd();
 
