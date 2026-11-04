@@ -51,13 +51,17 @@ using TimerRing       = SDK::LVGL::TimerRing;
 using Toggle          = SDK::LVGL::Toggle;
 
 // -----------------------------------------------------------------------------
-/// The SDK title in Run's Italic 18.
+/// The SDK title in Run's Italic 18, its label as wide as the rule under it so "TRACKRUN CE" fits.
 class Title : public SDK::LVGL::Title
 {
 public:
     Title(lv_obj_t* parent, const char* text)
         : SDK::LVGL::Title(parent, Theme::font(Theme::Font::Italic18), text)
     {
+        // The SDK creates the label last, 120 px wide from x = 60; the rule spans 140 px from x = 50.
+        lv_obj_t* label = lv_obj_get_child(parent, -1);
+        lv_obj_set_x(label, 50);
+        lv_obj_set_width(label, 140);
     }
 };
 

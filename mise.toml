@@ -1,5 +1,5 @@
 [vars]
-app = "TrackRun"
+app = "TrackRunCE"
 
 [tools]
 uv = "latest"

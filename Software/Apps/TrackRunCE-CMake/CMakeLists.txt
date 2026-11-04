@@ -1,11 +1,11 @@
-# TrackRun -- pace and distance for indoor track runs, GUI built on LVGL.
+# Track Run CE -- community edition track run app: lap-corrected pace, GUI built on LVGL.
 cmake_minimum_required(VERSION 3.21)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build")
 
 # App configuration
-set(APP_NAME "TrackRun")
-set(APP_USER_NAME "TrackRun")
-set(APP_FILE_NAME "TrackRun")
+set(APP_NAME "TrackRunCE")
+set(APP_USER_NAME "Track Run CE")
+set(APP_FILE_NAME "TrackRunCE")
 set(APP_TYPE "Activity")
 set(DEV_ID "UNA")
 set(RESOURCES_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../../Resources")
@@ -72,9 +72,9 @@ set(GUI_COMPILE_DEFINITIONS
     ${UNA_SDK_DEFINES_GUI_LVGL}
 )
 # Frame timing in the syslog, one line per 100 kernel ticks (see the LVGL port).
-# For measuring, not for shipping: cmake -DTRACKRUN_FRAME_STATS=ON ...
-option(TRACKRUN_FRAME_STATS "Log frame timing statistics from the GUI process" OFF)
-if(TRACKRUN_FRAME_STATS)
+# For measuring, not for shipping: cmake -DTRACKRUNCE_FRAME_STATS=ON ...
+option(TRACKRUNCE_FRAME_STATS "Log frame timing statistics from the GUI process" OFF)
+if(TRACKRUNCE_FRAME_STATS)
     list(APPEND GUI_COMPILE_DEFINITIONS UNA_LVGL_FRAME_STATS=1)
 endif()
 # LVGL's software renderer recurses deeper than TouchGFX; give the GUI task

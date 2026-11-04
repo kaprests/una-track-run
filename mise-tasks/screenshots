@@ -20,7 +20,7 @@ shoot() {
   mkdir -p "$cwd" "$root/Output"
   if [ -d "simulator-fs/$1" ]; then cp -r "simulator-fs/$1/." "$root/Output/"; fi
   (cd "$cwd" && SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy \
-     TRACKRUN_SCREENSHOT_DIR="$work/raw" TRACKRUN_SCREENSHOT_TOUR="$1" \
+     TRACKRUNCE_SCREENSHOT_DIR="$work/raw" TRACKRUNCE_SCREENSHOT_TOUR="$1" \
      timeout 200 "$bin" > "$root/log.txt" 2>&1) ||
     { echo "Tour '$1' failed; see $root/log.txt" >&2; exit 1; }
 }

@@ -119,12 +119,12 @@ void run(const Step (&steps)[N])
 
 void ScreenshotTour::startIfRequested()
 {
-    const char* dir = std::getenv("TRACKRUN_SCREENSHOT_DIR");
+    const char* dir = std::getenv("TRACKRUNCE_SCREENSHOT_DIR");
     if (!dir) {
         return;
     }
     sDir = dir;
-    const char* tour = std::getenv("TRACKRUN_SCREENSHOT_TOUR");
+    const char* tour = std::getenv("TRACKRUNCE_SCREENSHOT_TOUR");
     if (tour && std::strcmp(tour, "outdoor") == 0) {
         run(kOutdoor);
     } else {

@@ -13,7 +13,7 @@
 
 namespace Strings
 {
-inline constexpr const char* kAppNameUc = "TRACKRUN";
+inline constexpr const char* kAppNameUc = "TRACKRUN CE";
 inline constexpr const char* kKm        = "km";
 inline constexpr const char* kMi        = "mi";
 inline constexpr const char* kNoValue   = "---";

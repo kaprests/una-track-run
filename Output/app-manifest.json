@@ -3,9 +3,9 @@
   "type": [
     "activity"
   ],
-  "name": "TrackRun",
+  "name": "Track Run CE",
   "icon": "icon.png",
-  "binary": "TrackRun_0.1.0.uapp",
+  "binary": "TrackRunCE_0.1.0.uapp",
   "appVersion": "0.1.0",
   "minKernelVersion": "1.4.0",
   "requiredHardware": [
@@ -13,7 +13,7 @@
     "HR"
   ],
   "stravaExport": true,
-  "description": "Accurate, calibrated live pace when running on tracks or known distance intervals. For indoor track runs, without GPS signal, pace is estimated from cadence and the personal stride model that the Running app builds during you outdoor runs. On outdoor runs pace is derived from the GPS positioning. On free runs or time defined intervals, press the lap button at each completed track lap, and the known track length is used to correct the pace and run distance to exact values and also to calibrate the pace estimates for indoor runs. On distance defined intervals, press the lap button for each completed interval instead of each completed track lap. Outdoors, laps can be counted automatically when GPS passes the start line. Set lap length, lane and lane width, run free laps or intervals with warm-up, and save the run as a track activity with exact laps. Early version: developed in the simulator and not yet tested on a real watch.",
+  "description": "Accurate, calibrated live pace when running on tracks or known distance intervals. For indoor track runs, without GPS signal, pace is estimated from cadence and the personal stride model that the Running app builds during your outdoor runs. On outdoor runs pace is derived from the GPS positioning. On free runs or time defined intervals, press the lap button at each completed track lap, and the known track length is used to correct the pace and run distance to exact values and also to calibrate the pace estimates for indoor runs. On distance defined intervals, press the lap button for each completed interval instead of each completed track lap. Outdoors, laps can be counted automatically when GPS passes the start line. Set lap length, lane and lane width, run free laps or intervals with warm-up, and save the run as a track activity with exact laps. Early version: developed in the simulator and not yet tested on a real watch. Community edition, not the official UNA Track Run.",
   "id": "8CD493F76B530120",
   "supportsLaps": true,
   "supportsDistance": true,

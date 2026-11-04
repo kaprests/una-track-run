@@ -1,4 +1,4 @@
-# TrackRun PC simulator: the app's service and LVGL GUI processes running
+# Track Run CE PC simulator: the app's service and LVGL GUI processes running
 # against the SDK's mock kernel, with the display in an SDL2 window.
 #
 # Needs a host C++ compiler, CMake, Ninja (or a Visual Studio generator) and
@@ -25,7 +25,7 @@ if("$ENV{UNA_SDK}" STREQUAL "")
     message(FATAL_ERROR "UNA_SDK environment variable is not set. Point it at the SDK root.")
 endif()
 
-project(TrackRunSimulator C CXX)
+project(TrackRunCESimulator C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -53,7 +53,7 @@ foreach(cfg Debug Release RelWithDebInfo MinSizeRel)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${CFG} "${SIM_BIN_DIR}")
 endforeach()
 
-add_executable(TrackRunSimulator
+add_executable(TrackRunCESimulator
     main.cpp
     ScreenshotTour.cpp
     ${GUI_APP_SOURCES}
@@ -63,7 +63,7 @@ add_executable(TrackRunSimulator
     ${UNA_SDK_SOURCES_SIMULATOR_LVGL}
 )
 
-target_include_directories(TrackRunSimulator PRIVATE
+target_include_directories(TrackRunCESimulator PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}          # ConfigurationSimulator.hpp
     ${GUI_APP_INCLUDE_DIRS}
     ${LIBS_INCLUDE_DIRS}
@@ -73,7 +73,7 @@ target_include_directories(TrackRunSimulator PRIVATE
 
 # The identity the service writes into settings and FIT files. The values
 # stand in for what the .uapp build derives from CMakeLists.txt and git.
-target_compile_definitions(TrackRunSimulator PRIVATE
+target_compile_definitions(TrackRunCESimulator PRIVATE
     ${UNA_SDK_DEFINES_SIMULATOR}
     ${UNA_SDK_DEFINES_GUI_LVGL}
     APP_ID="${APP_ID}"
@@ -82,11 +82,11 @@ target_compile_definitions(TrackRunSimulator PRIVATE
 )
 
 find_package(Threads REQUIRED)
-target_link_libraries(TrackRunSimulator PRIVATE Threads::Threads)
-una_simulator_link_sdl2(TrackRunSimulator)
+target_link_libraries(TrackRunCESimulator PRIVATE Threads::Threads)
+una_simulator_link_sdl2(TrackRunCESimulator)
 
 if(MSVC)
-    target_compile_options(TrackRunSimulator PRIVATE /W3 /MP)
+    target_compile_options(TrackRunCESimulator PRIVATE /W3 /MP)
 else()
-    target_compile_options(TrackRunSimulator PRIVATE -Wall -Wextra -Wno-unused-parameter)
+    target_compile_options(TrackRunCESimulator PRIVATE -Wall -Wextra -Wno-unused-parameter)
 endif()

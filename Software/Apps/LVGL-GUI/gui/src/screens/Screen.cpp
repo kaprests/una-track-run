@@ -1,7 +1,7 @@
 /**
  ******************************************************************************
  * @file    Screen.cpp
- * @brief   Base class of every TrackRun screen.
+ * @brief   Base class of every Track Run CE screen.
  ******************************************************************************
  */
 

@@ -1,4 +1,6 @@
-# TrackRun
+# Track Run CE
+
+Community edition, not the official UNA Track Run.
 
 Live pace and distance on a running track, indoors without GPS or outdoors with it.
 
