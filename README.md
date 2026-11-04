@@ -1,6 +1,7 @@
 # Track Run CE
 
 Community edition, not the official UNA Track Run.
+The official Track Run app was announced shortly after this was developed, and should probably be preferred over this.
 
 Live pace and distance on a running track, indoors without GPS or outdoors with it.
 
